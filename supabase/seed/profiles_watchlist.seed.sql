@@ -1,0 +1,24 @@
+-- profiles_watchlist seed template
+--
+-- Ce fichier est volontairement vide. La liste réelle des profils sera
+-- alimentée par `packages/scripts/src/seed-watchlist.ts` qui lit un CSV
+-- ou un fichier JSON externe (hors repo, sources non publiables).
+--
+-- Pour un seed manuel ponctuel, dé-commenter et adapter le bloc ci-dessous.
+--
+-- INSERT INTO profiles_watchlist (
+--   profile_id,
+--   nom,
+--   headline,
+--   secteur,
+--   langue,
+--   audience_size_estimee,
+--   is_active,
+--   notes
+-- ) VALUES
+--   ('linkedin-handle-1', 'Nom Prénom', 'Courtier IARD', 'courtage', 'FR', 12000, true, 'Référence FR sinistres'),
+--   ('linkedin-handle-2', 'Nom Prénom', 'DG mutuelle',   'mutuelle', 'FR',  8000, true, 'Voix dirigeante sur transformation back-office')
+-- ON CONFLICT (profile_id) DO UPDATE
+--   SET nom = EXCLUDED.nom,
+--       headline = EXCLUDED.headline,
+--       updated_at = NOW();

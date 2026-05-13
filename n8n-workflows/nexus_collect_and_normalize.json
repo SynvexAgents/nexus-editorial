@@ -1,0 +1,527 @@
+{
+  "name": "Nexus Editorial — Collect & Normalize",
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "saveDataErrorExecution": "all",
+    "saveDataSuccessExecution": "all",
+    "saveExecutionProgress": true,
+    "timezone": "Europe/Paris",
+    "errorWorkflow": ""
+  },
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "trg_manual",
+      "name": "Manual Trigger",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [240, 240]
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 22 * * 6"
+            }
+          ]
+        },
+        "notes": "Cron samedi 22:00 Europe/Paris. NE PAS ACTIVER tant que la qualité collecte n'est pas validée à la main (cf. HANDOFF tâche n°2)."
+      },
+      "id": "trg_schedule",
+      "name": "Schedule Trigger (disabled)",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.1,
+      "position": [240, 480],
+      "disabled": true
+    },
+    {
+      "parameters": {
+        "operation": "getAll",
+        "tableId": "profiles_watchlist",
+        "returnAll": true,
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "is_active",
+              "condition": "eq",
+              "keyValue": "true"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "sb_watchlist",
+      "name": "Supabase: Get Active Profiles",
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [460, 320],
+      "credentials": {
+        "supabaseApi": {
+          "id": "{{SUPABASE_CREDENTIAL_ID}}",
+          "name": "Supabase Nexus"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "language": "javaScript",
+        "jsCode": "// Build Apify input for harvestapi/linkedin-profile-posts.\n// Reads watchlist rows from previous node, produces a single input object.\nconst MAX_POSTS_PER_RUN = parseInt($env.APIFY_MAX_POSTS_PER_RUN || '500', 10);\nconst profiles = $input.all().map((i) => i.json);\nconst targetUrls = profiles\n  .filter((p) => p.profile_id)\n  .map((p) =>\n    p.profile_id.startsWith('http')\n      ? p.profile_id\n      : `https://www.linkedin.com/in/${p.profile_id}/`,\n  );\nconst maxPostsPerProfile = Math.max(1, Math.floor(MAX_POSTS_PER_RUN / Math.max(targetUrls.length, 1)));\nreturn [{\n  json: {\n    actorPrimary: 'harvestapi~linkedin-profile-posts',\n    actorFallback1: 'harvestapi~linkedin-post-search',\n    actorFallback2: 'apimaestro~linkedin-posts-search-scraper-no-cookies',\n    activeProfileIds: profiles.map((p) => p.profile_id),\n    apifyInput: {\n      targetUrls,\n      maxPosts: maxPostsPerProfile,\n      scrapeReactions: false,\n      scrapeComments: true,\n      maxComments: 10,\n      postedLimitDate: new Date(Date.now() - 7 * 24 * 3600 * 1000).toISOString(),\n      includeQuotePosts: false,\n      includeReposts: false,\n    },\n  },\n}];\n"
+      },
+      "id": "code_build_input",
+      "name": "Code: build_apify_input",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [680, 320]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://api.apify.com/v2/acts/{{$json.actorPrimary}}/run-sync-get-dataset-items",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [{ "name": "token", "value": "={{$env.APIFY_TOKEN}}" }]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json.apifyInput) }}",
+        "options": {
+          "timeout": 180000,
+          "retry": {
+            "maxRetries": 2,
+            "waitBetween": 1000,
+            "backoffStrategy": "exponential"
+          },
+          "response": {
+            "fullResponse": false,
+            "neverError": true
+          }
+        }
+      },
+      "id": "http_apify_primary",
+      "name": "HTTP: Apify Primary (harvestapi profile-posts)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [900, 320],
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose"
+          },
+          "conditions": [
+            {
+              "leftValue": "={{ Array.isArray($json) && $json.length > 0 }}",
+              "rightValue": "true",
+              "operator": { "type": "boolean", "operation": "true" }
+            }
+          ],
+          "combinator": "and"
+        }
+      },
+      "id": "if_primary_ok",
+      "name": "IF apify_primary_ok",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [1120, 320]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://api.apify.com/v2/acts/{{$('Code: build_apify_input').first().json.actorFallback1}}/run-sync-get-dataset-items",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [{ "name": "token", "value": "={{$env.APIFY_TOKEN}}" }]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ ...$('Code: build_apify_input').first().json.apifyInput, searchQueries: ['*'] }) }}",
+        "options": {
+          "timeout": 180000,
+          "retry": { "maxRetries": 2, "waitBetween": 1000, "backoffStrategy": "exponential" },
+          "response": { "fullResponse": false, "neverError": true }
+        }
+      },
+      "id": "http_apify_fb1",
+      "name": "HTTP: Apify Fallback 1 (harvestapi post-search)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1340, 460],
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": { "caseSensitive": true, "leftValue": "", "typeValidation": "loose" },
+          "conditions": [
+            {
+              "leftValue": "={{ Array.isArray($json) && $json.length > 0 }}",
+              "rightValue": "true",
+              "operator": { "type": "boolean", "operation": "true" }
+            }
+          ],
+          "combinator": "and"
+        }
+      },
+      "id": "if_fb1_ok",
+      "name": "IF apify_fallback1_ok",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [1560, 460]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://api.apify.com/v2/acts/{{$('Code: build_apify_input').first().json.actorFallback2}}/run-sync-get-dataset-items",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [{ "name": "token", "value": "={{$env.APIFY_TOKEN}}" }]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ keyword: 'assurance OR courtage OR sinistres' }) }}",
+        "options": {
+          "timeout": 180000,
+          "retry": { "maxRetries": 2, "waitBetween": 1000, "backoffStrategy": "exponential" },
+          "response": { "fullResponse": false, "neverError": true }
+        }
+      },
+      "id": "http_apify_fb2",
+      "name": "HTTP: Apify Fallback 2 (apimaestro)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1780, 600],
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": { "caseSensitive": true, "leftValue": "", "typeValidation": "loose" },
+          "conditions": [
+            {
+              "leftValue": "={{ Array.isArray($json) && $json.length > 0 }}",
+              "rightValue": "true",
+              "operator": { "type": "boolean", "operation": "true" }
+            }
+          ],
+          "combinator": "and"
+        }
+      },
+      "id": "if_fb2_ok",
+      "name": "IF apify_fallback2_ok",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [2000, 600]
+    },
+    {
+      "parameters": {
+        "authentication": "webhook",
+        "webhookUri": "={{$env.SLACK_WEBHOOK_URL}}",
+        "text": "=:rotating_light: Nexus Editorial — collect failed on all 3 Apify actors.\\nRun id: {{$execution.id}}\\nProfiles attempted: {{$('Code: build_apify_input').first().json.activeProfileIds.length}}\\nTimestamp: {{$now.toISO()}}",
+        "otherOptions": {}
+      },
+      "id": "slack_total_fail",
+      "name": "Slack: Notify Total Failure",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.2,
+      "position": [2220, 720]
+    },
+    {
+      "parameters": {
+        "language": "javaScript",
+        "jsCode": "// validate_and_route — Zod minimal schema gate.\n// Output 1 (main[0]): valid posts paired with their actor id.\n// Output 2 (main[1]): DLQ entries.\nconst actorId = $('Code: build_apify_input').first().json.actorPrimary; // overwritten per branch below if fallback\nconst rawPosts = $input.all().map((i) => i.json);\n\n// Minimal schema check inline (mirrors apifyPostMinimalSchema).\nfunction extractMinimal(p) {\n  // HarvestAPI shape\n  const post_id = p.id || p.urn || p.postId || '';\n  const author = p.author || {};\n  const author_id = author.publicIdentifier || author.urn || author.profileId || p.authorUrn || '';\n  const postedAt = p.postedAt || p.publishedAt || p.posted_at || p.time;\n  let published_at = '';\n  if (typeof postedAt === 'string') published_at = postedAt;\n  else if (postedAt && typeof postedAt === 'object') published_at = postedAt.date || postedAt.iso || '';\n  else if (typeof postedAt === 'number') published_at = new Date(postedAt < 1e12 ? postedAt*1000 : postedAt).toISOString();\n  const text = (p.content || p.text || '').toString().replace(/\\s+/g, ' ').trim();\n  return { post_id, author_id, published_at, text };\n}\n\nconst valid = [], dlq = [];\nfor (const raw of rawPosts) {\n  const m = extractMinimal(raw);\n  const missing = ['post_id','author_id','published_at','text'].filter((k) => !m[k]);\n  if (missing.length > 0) {\n    dlq.push({ raw_payload: raw, source_actor: actorId, error_reason: `minimal_schema_failed:missing:${missing.join(',')}` });\n  } else {\n    valid.push({ raw, minimal: m, source_actor: actorId });\n  }\n}\nreturn [\n  valid.map((v) => ({ json: v })),\n  dlq.map((d) => ({ json: d })),\n];\n"
+      },
+      "id": "code_validate",
+      "name": "Code: validate_and_route",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1340, 320]
+    },
+    {
+      "parameters": {
+        "language": "javaScript",
+        "jsCode": "// map_to_raw_posts — produces rows ready for raw_posts UPSERT.\n// Delegates to the appropriate field mapping based on source_actor.\nconst DAY_MAP = { Mon:'Lun', Tue:'Mar', Wed:'Mer', Thu:'Jeu', Fri:'Ven', Sat:'Sam', Sun:'Dim' };\nfunction parisParts(date) {\n  const fmt = new Intl.DateTimeFormat('en-CA', { timeZone:'Europe/Paris', weekday:'short', hour:'2-digit', hour12:false });\n  const p = fmt.formatToParts(date);\n  const get = (t) => p.find((x) => x.type === t)?.value || '';\n  const hr = parseInt(get('hour'), 10);\n  return { weekday: DAY_MAP[get('weekday')] || 'Lun', hour: hr === 24 ? 0 : hr };\n}\nfunction safeInt(v, d=0) { const n = typeof v === 'number' ? v : parseInt(String(v ?? ''), 10); return Number.isFinite(n) ? Math.max(0, n) : d; }\nfunction detectMedia(raw) {\n  if (raw.document || raw.documentUrl || raw.document_url) return 'document';\n  if (raw.video || raw.videoUrl || raw.video_url) return 'video';\n  const imgs = raw.postImages || raw.images || raw.media;\n  if (Array.isArray(imgs)) {\n    if (imgs.length > 1) return 'carrousel';\n    if (imgs.length === 1) return 'image';\n  }\n  return 'texte';\n}\nfunction topComments(raw) {\n  const arr = raw.comments;\n  if (!Array.isArray(arr) || arr.length === 0) return null;\n  return arr.map((c) => ({\n    author: (c.author && c.author.name) || c.authorName || 'unknown',\n    text: (c.commentary || c.text || c.content || '').toString(),\n    likes: safeInt(c.likes ?? c.reactions ?? c.likesCount),\n  })).filter((c) => c.text).sort((a,b) => b.likes - a.likes).slice(0, 5);\n}\n\nconst rows = $input.all().map((i) => {\n  const { raw, minimal, source_actor } = i.json;\n  const d = new Date(minimal.published_at);\n  const p = parisParts(d);\n  const eng = raw.engagement || {};\n  const reactions = raw.reactions || {};\n  return {\n    json: {\n      post_id: minimal.post_id,\n      profile_id: minimal.author_id,\n      published_at: d.toISOString(),\n      day_of_week: p.weekday,\n      hour_of_day: p.hour,\n      text: minimal.text,\n      media_type: detectMedia(raw),\n      likes: safeInt(eng.likes ?? reactions.LIKE ?? raw.likes ?? raw.like_count),\n      comments: safeInt(eng.comments ?? raw.comments_count ?? raw.commentsCount),\n      reposts: safeInt(eng.shares ?? raw.share_count ?? raw.reposts ?? raw.shares),\n      views_estimees: raw.views != null ? safeInt(raw.views) : (raw.view_count != null ? safeInt(raw.view_count) : null),\n      url: raw.linkedinUrl || raw.url || raw.post_url || null,\n      comment_sample: topComments(raw),\n      source_actor,\n    },\n  };\n});\nreturn rows;\n"
+      },
+      "id": "code_map_raw",
+      "name": "Code: map_to_raw_posts",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1560, 240]
+    },
+    {
+      "parameters": {
+        "operation": "upsert",
+        "tableId": "raw_posts",
+        "matchType": "anyFilter",
+        "fieldsUi": {
+          "fieldValues": [
+            { "fieldId": "post_id", "fieldValue": "={{$json.post_id}}" },
+            { "fieldId": "profile_id", "fieldValue": "={{$json.profile_id}}" },
+            { "fieldId": "published_at", "fieldValue": "={{$json.published_at}}" },
+            { "fieldId": "day_of_week", "fieldValue": "={{$json.day_of_week}}" },
+            { "fieldId": "hour_of_day", "fieldValue": "={{$json.hour_of_day}}" },
+            { "fieldId": "text", "fieldValue": "={{$json.text}}" },
+            { "fieldId": "media_type", "fieldValue": "={{$json.media_type}}" },
+            { "fieldId": "likes", "fieldValue": "={{$json.likes}}" },
+            { "fieldId": "comments", "fieldValue": "={{$json.comments}}" },
+            { "fieldId": "reposts", "fieldValue": "={{$json.reposts}}" },
+            { "fieldId": "views_estimees", "fieldValue": "={{$json.views_estimees}}" },
+            { "fieldId": "url", "fieldValue": "={{$json.url}}" },
+            {
+              "fieldId": "comment_sample",
+              "fieldValue": "={{ $json.comment_sample ? JSON.stringify($json.comment_sample) : null }}"
+            },
+            { "fieldId": "source_actor", "fieldValue": "={{$json.source_actor}}" }
+          ]
+        },
+        "filters": {
+          "conditions": [
+            { "keyName": "post_id", "condition": "eq", "keyValue": "={{$json.post_id}}" }
+          ]
+        }
+      },
+      "id": "sb_upsert_raw",
+      "name": "Supabase: UPSERT raw_posts",
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [1780, 240],
+      "credentials": {
+        "supabaseApi": { "id": "{{SUPABASE_CREDENTIAL_ID}}", "name": "Supabase Nexus" }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "create",
+        "tableId": "raw_posts_dlq",
+        "fieldsUi": {
+          "fieldValues": [
+            { "fieldId": "raw_payload", "fieldValue": "={{ JSON.stringify($json.raw_payload) }}" },
+            { "fieldId": "source_actor", "fieldValue": "={{$json.source_actor}}" },
+            { "fieldId": "error_reason", "fieldValue": "={{$json.error_reason}}" }
+          ]
+        }
+      },
+      "id": "sb_dlq_insert",
+      "name": "Supabase: Insert DLQ",
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [1780, 60],
+      "credentials": {
+        "supabaseApi": { "id": "{{SUPABASE_CREDENTIAL_ID}}", "name": "Supabase Nexus" }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "getAll",
+        "tableId": "raw_posts",
+        "returnAll": true,
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "collected_at",
+              "condition": "gte",
+              "keyValue": "={{ $now.minus({hours:24}).toISO() }}"
+            }
+          ]
+        }
+      },
+      "id": "sb_get_recent",
+      "name": "Supabase: Get Recent Raw Posts (24h)",
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [2000, 240],
+      "credentials": {
+        "supabaseApi": { "id": "{{SUPABASE_CREDENTIAL_ID}}", "name": "Supabase Nexus" }
+      }
+    },
+    {
+      "parameters": {
+        "language": "javaScript",
+        "jsCode": "// normalizer (inline port of packages/n8n-nodes/src/normalizer.ts).\n// Source of truth: TypeScript module, tested in __tests__/normalizer.test.ts.\n// This inline JS uses a French stopword HEURISTIC instead of franc-min because\n// n8n cloud Code Nodes don't load arbitrary npm modules. Accuracy gap acceptable\n// for the FR/non-FR cut after the > 200 char prefilter.\n//\n// Inputs:  raw_posts rows from previous node.\n// Outputs: three items — { type:'clean_posts', items }, { type:'temporal_rows', items }, { type:'stats', ... }.\n// Author baselines & followers expected via $vars (workflow variables); fall back to empty maps.\n\nconst FR_STOPWORDS = new Set(['le','la','les','de','des','du','un','une','et','à','au','aux','pour','que','qui','dans','sur','avec','par','ne','pas','est','sont','cette','ces','mais','ou','donc','son','sa','ses','nos','votre','vos','leur','leurs','comme','plus','tout','tous','dont','où','être','avoir','fait','faire','peut','très','aussi','encore','même','déjà']);\nfunction isFrench(text) {\n  if (!text || text.length < 50) return false;\n  const words = text.toLowerCase().split(/[\\s,.!?;:'\"()\\[\\]…—\\-]+/).filter((w) => w.length > 0);\n  if (words.length < 20) return false;\n  let n = 0;\n  for (const w of words) if (FR_STOPWORDS.has(w)) n += 1;\n  return n / words.length >= 0.06;\n}\nconst SELF_PROMO = [/réservez\\s+(votre|une)\\s+démo/i,/lien\\s+(en|dans)\\s+bio/i,/cliquez\\s+ici\\s+pour/i,/n[''']hésitez\\s+pas\\s+à\\s+me\\s+contacter/i,/\\bdm\\s+moi\\b/i,/inscrivez-vous\\s+(à|au)\\s+(notre|mon)/i,/profitez\\s+de\\s+[0-9]+\\s*%/i,/offre\\s+(spéciale|limitée)/i];\nfunction isSelfPromo(t) { return SELF_PROMO.some((re) => re.test(t)); }\nconst TOPIC_RULES = [['pilotage',/\\b(s\\/p|loss\\s*ratio|ratio\\s*combiné|ibnr|prime\\s+d[''']équilibre|dérive)\\b/i],['commercial',/\\b(bordereau|commission|rétrocession|rétention|apporteur|churn)\\b/i],['reglementaire',/\\b(acpr|rgpd|audit\\s+trail|conformité|défendabilité)\\b/i],['operationnel',/\\b(sinistre|indemnisation|\\bij\\b|fraude|\\bmrp\\b|\\brc\\s*pro\\b)\\b/i],['tech_ia',/\\b(agent\\s+ia|llm|claude|gpt|automation|n8n)\\b/i],['marche_assurance',/\\b(mga|mutuelle|courtage|insurtech|réassureur|embedded)\\b/i]];\nfunction detectCluster(t) { for (const [c, re] of TOPIC_RULES) if (re.test(t)) return c; return 'autre'; }\nconst DAY_MAP = { Mon:'Lun', Tue:'Mar', Wed:'Mer', Thu:'Jeu', Fri:'Ven', Sat:'Sam', Sun:'Dim' };\nfunction parisParts(date) {\n  const fmt = new Intl.DateTimeFormat('en-CA', { timeZone:'Europe/Paris', year:'numeric', month:'2-digit', day:'2-digit', weekday:'short', hour:'2-digit', hour12:false });\n  const p = fmt.formatToParts(date);\n  const g = (t) => p.find((x) => x.type === t)?.value || '';\n  const hr = parseInt(g('hour'), 10);\n  return { year:+g('year'), month:+g('month'), day:+g('day'), weekday: DAY_MAP[g('weekday')] || 'Lun', hour: hr === 24 ? 0 : hr };\n}\nfunction isoWeek(p) {\n  const u = new Date(Date.UTC(p.year, p.month-1, p.day));\n  const dn = u.getUTCDay() || 7;\n  u.setUTCDate(u.getUTCDate() + 4 - dn);\n  const ys = new Date(Date.UTC(u.getUTCFullYear(), 0, 1));\n  const w = Math.ceil(((u.getTime() - ys.getTime())/86400000 + 1)/7);\n  return u.getUTCFullYear() + '-W' + String(w).padStart(2,'0');\n}\nfunction hourBucket(h) {\n  if (h>=6 && h<8) return '06h-08h';\n  if (h>=8 && h<10) return '08h-10h';\n  if (h>=10 && h<12) return '10h-12h';\n  if (h>=12 && h<14) return '12h-14h';\n  if (h>=14 && h<17) return '14h-17h';\n  if (h>=17 && h<19) return '17h-19h';\n  if (h>=19 && h<21) return '19h-21h';\n  return 'autre';\n}\n\nconst baselines = $vars && $vars.authorBaselines ? new Map(Object.entries($vars.authorBaselines)) : new Map();\nconst followers = $vars && $vars.followersByAuthor ? new Map(Object.entries($vars.followersByAuthor)) : new Map();\nconst activeIds = $vars && $vars.activeProfileIds ? new Set($vars.activeProfileIds) : null;\nconst rawPosts = $input.all().map((i) => i.json);\nconst seen = new Set(), clean = [], rejected = [], temporal = new Map();\n\nfor (const p of rawPosts) {\n  if (seen.has(p.post_id)) continue;\n  seen.add(p.post_id);\n  if (activeIds && (!p.profile_id || !activeIds.has(p.profile_id))) { rejected.push({ post_id: p.post_id, reason: 'off_watchlist' }); continue; }\n  const text = p.text || '';\n  if (text.length < 200) { rejected.push({ post_id: p.post_id, reason: 'too_short' }); continue; }\n  if (!isFrench(text)) { rejected.push({ post_id: p.post_id, reason: 'non_fr' }); continue; }\n  if (isSelfPromo(text)) { rejected.push({ post_id: p.post_id, reason: 'self_promo' }); continue; }\n  const eRaw = (p.likes || 0) + (p.comments || 0) * 3 + (p.reposts || 0) * 5;\n  const knownB = baselines.get(p.profile_id);\n  const baseline = knownB !== undefined ? Number(knownB) : (eRaw > 0 ? eRaw : 1);\n  const ratio = eRaw / Math.max(baseline, 1);\n  if (ratio < 0.8) { rejected.push({ post_id: p.post_id, reason: 'below_author_baseline' }); continue; }\n  const flw = Number(followers.get(p.profile_id) || 1000);\n  const ff = Math.log10(flw + 1) / Math.log10(100000);\n  const score = ratio * (1 + 0.3 * (1 / Math.max(ff, 0.01)));\n  const cluster = detectCluster(text);\n  clean.push({ post_id: p.post_id, engagement_score_normalized: score, is_relevant: true, topic_cluster_pre: cluster, filter_reason: null, processed_at: new Date().toISOString() });\n  const parts = parisParts(new Date(p.published_at));\n  const wk = isoWeek(parts), hb = hourBucket(parts.hour);\n  const key = wk + '|' + parts.weekday + '|' + hb;\n  let b = temporal.get(key);\n  if (!b) { b = { week_id: wk, day_of_week: parts.weekday, hour_bucket: hb, count: 0, sum: 0, formats: {} }; temporal.set(key, b); }\n  b.count += 1; b.sum += score;\n  const mt = p.media_type || 'texte';\n  b.formats[mt] = (b.formats[mt] || 0) + 1;\n}\n\nconst temporalRows = [...temporal.values()].map((b) => {\n  const dist = {};\n  let topFmt = 'texte', topCnt = -1;\n  for (const [k, v] of Object.entries(b.formats)) {\n    dist[k] = v / b.count;\n    if (v > topCnt) { topCnt = v; topFmt = k; }\n  }\n  return { week_id: b.week_id, day_of_week: b.day_of_week, hour_bucket: b.hour_bucket, posts_count: b.count, avg_engagement_norm: b.sum / b.count, top_format: topFmt, format_distribution: dist };\n});\n\nconst breakdown = rejected.reduce((acc, r) => { acc[r.reason] = (acc[r.reason] || 0) + 1; return acc; }, { off_watchlist: 0, too_short: 0, non_fr: 0, self_promo: 0, below_author_baseline: 0 });\n\nreturn [\n  { json: { type: 'clean_posts', items: clean } },\n  { json: { type: 'temporal_rows', items: temporalRows } },\n  { json: { type: 'stats', total_in: rawPosts.length, kept: clean.length, rejected: rejected.length, rejected_breakdown: breakdown, rejected_list: rejected } },\n];\n"
+      },
+      "id": "code_normalizer",
+      "name": "Code: normalizer",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [2220, 240]
+    },
+    {
+      "parameters": {
+        "language": "javaScript",
+        "jsCode": "// Split normalizer output into 2 streams for the 2 downstream Supabase nodes.\nconst all = $input.all();\nconst cleanItem = all.find((i) => i.json.type === 'clean_posts');\nconst temporalItem = all.find((i) => i.json.type === 'temporal_rows');\nconst statsItem = all.find((i) => i.json.type === 'stats');\nconst cleanRows = (cleanItem?.json.items || []).map((r) => ({ json: r }));\nconst temporalRows = (temporalItem?.json.items || []).map((r) => ({ json: { ...r, format_distribution: JSON.stringify(r.format_distribution) } }));\nreturn [cleanRows, temporalRows, [{ json: statsItem?.json || {} }]];\n"
+      },
+      "id": "code_split",
+      "name": "Code: split_outputs",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [2440, 240]
+    },
+    {
+      "parameters": {
+        "operation": "upsert",
+        "tableId": "clean_posts",
+        "matchType": "anyFilter",
+        "fieldsUi": {
+          "fieldValues": [
+            { "fieldId": "post_id", "fieldValue": "={{$json.post_id}}" },
+            {
+              "fieldId": "engagement_score_normalized",
+              "fieldValue": "={{$json.engagement_score_normalized}}"
+            },
+            { "fieldId": "is_relevant", "fieldValue": "={{$json.is_relevant}}" },
+            { "fieldId": "topic_cluster_pre", "fieldValue": "={{$json.topic_cluster_pre}}" },
+            { "fieldId": "filter_reason", "fieldValue": "={{$json.filter_reason}}" }
+          ]
+        },
+        "filters": {
+          "conditions": [
+            { "keyName": "post_id", "condition": "eq", "keyValue": "={{$json.post_id}}" }
+          ]
+        }
+      },
+      "id": "sb_upsert_clean",
+      "name": "Supabase: UPSERT clean_posts",
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [2660, 180],
+      "credentials": {
+        "supabaseApi": { "id": "{{SUPABASE_CREDENTIAL_ID}}", "name": "Supabase Nexus" }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "upsert",
+        "tableId": "temporal_analysis",
+        "matchType": "allFilters",
+        "fieldsUi": {
+          "fieldValues": [
+            { "fieldId": "week_id", "fieldValue": "={{$json.week_id}}" },
+            { "fieldId": "day_of_week", "fieldValue": "={{$json.day_of_week}}" },
+            { "fieldId": "hour_bucket", "fieldValue": "={{$json.hour_bucket}}" },
+            { "fieldId": "posts_count", "fieldValue": "={{$json.posts_count}}" },
+            { "fieldId": "avg_engagement_norm", "fieldValue": "={{$json.avg_engagement_norm}}" },
+            { "fieldId": "top_format", "fieldValue": "={{$json.top_format}}" },
+            { "fieldId": "format_distribution", "fieldValue": "={{$json.format_distribution}}" }
+          ]
+        },
+        "filters": {
+          "conditions": [
+            { "keyName": "week_id", "condition": "eq", "keyValue": "={{$json.week_id}}" },
+            { "keyName": "day_of_week", "condition": "eq", "keyValue": "={{$json.day_of_week}}" },
+            { "keyName": "hour_bucket", "condition": "eq", "keyValue": "={{$json.hour_bucket}}" }
+          ]
+        }
+      },
+      "id": "sb_upsert_temporal",
+      "name": "Supabase: UPSERT temporal_analysis",
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [2660, 320],
+      "credentials": {
+        "supabaseApi": { "id": "{{SUPABASE_CREDENTIAL_ID}}", "name": "Supabase Nexus" }
+      }
+    },
+    {
+      "parameters": {},
+      "id": "trg_error",
+      "name": "Error Trigger",
+      "type": "n8n-nodes-base.errorTrigger",
+      "typeVersion": 1,
+      "position": [240, 760]
+    },
+    {
+      "parameters": {
+        "authentication": "webhook",
+        "webhookUri": "={{$env.SLACK_WEBHOOK_URL}}",
+        "text": "=:warning: Nexus Editorial — workflow error.\\nNode failed: {{$json.execution.lastNodeExecuted}}\\nRun id: {{$execution.id}}\\nError: {{$json.execution.error.message}}\\nTimestamp: {{$now.toISO()}}",
+        "otherOptions": {}
+      },
+      "id": "slack_error",
+      "name": "Slack: Notify Error",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.2,
+      "position": [460, 760]
+    }
+  ],
+  "connections": {
+    "Manual Trigger": {
+      "main": [[{ "node": "Supabase: Get Active Profiles", "type": "main", "index": 0 }]]
+    },
+    "Schedule Trigger (disabled)": {
+      "main": [[{ "node": "Supabase: Get Active Profiles", "type": "main", "index": 0 }]]
+    },
+    "Supabase: Get Active Profiles": {
+      "main": [[{ "node": "Code: build_apify_input", "type": "main", "index": 0 }]]
+    },
+    "Code: build_apify_input": {
+      "main": [
+        [{ "node": "HTTP: Apify Primary (harvestapi profile-posts)", "type": "main", "index": 0 }]
+      ]
+    },
+    "HTTP: Apify Primary (harvestapi profile-posts)": {
+      "main": [[{ "node": "IF apify_primary_ok", "type": "main", "index": 0 }]]
+    },
+    "IF apify_primary_ok": {
+      "main": [
+        [{ "node": "Code: validate_and_route", "type": "main", "index": 0 }],
+        [{ "node": "HTTP: Apify Fallback 1 (harvestapi post-search)", "type": "main", "index": 0 }]
+      ]
+    },
+    "HTTP: Apify Fallback 1 (harvestapi post-search)": {
+      "main": [[{ "node": "IF apify_fallback1_ok", "type": "main", "index": 0 }]]
+    },
+    "IF apify_fallback1_ok": {
+      "main": [
+        [{ "node": "Code: validate_and_route", "type": "main", "index": 0 }],
+        [{ "node": "HTTP: Apify Fallback 2 (apimaestro)", "type": "main", "index": 0 }]
+      ]
+    },
+    "HTTP: Apify Fallback 2 (apimaestro)": {
+      "main": [[{ "node": "IF apify_fallback2_ok", "type": "main", "index": 0 }]]
+    },
+    "IF apify_fallback2_ok": {
+      "main": [
+        [{ "node": "Code: validate_and_route", "type": "main", "index": 0 }],
+        [{ "node": "Slack: Notify Total Failure", "type": "main", "index": 0 }]
+      ]
+    },
+    "Code: validate_and_route": {
+      "main": [
+        [{ "node": "Code: map_to_raw_posts", "type": "main", "index": 0 }],
+        [{ "node": "Supabase: Insert DLQ", "type": "main", "index": 0 }]
+      ]
+    },
+    "Code: map_to_raw_posts": {
+      "main": [[{ "node": "Supabase: UPSERT raw_posts", "type": "main", "index": 0 }]]
+    },
+    "Supabase: UPSERT raw_posts": {
+      "main": [[{ "node": "Supabase: Get Recent Raw Posts (24h)", "type": "main", "index": 0 }]]
+    },
+    "Supabase: Get Recent Raw Posts (24h)": {
+      "main": [[{ "node": "Code: normalizer", "type": "main", "index": 0 }]]
+    },
+    "Code: normalizer": {
+      "main": [[{ "node": "Code: split_outputs", "type": "main", "index": 0 }]]
+    },
+    "Code: split_outputs": {
+      "main": [
+        [{ "node": "Supabase: UPSERT clean_posts", "type": "main", "index": 0 }],
+        [{ "node": "Supabase: UPSERT temporal_analysis", "type": "main", "index": 0 }]
+      ]
+    },
+    "Error Trigger": {
+      "main": [[{ "node": "Slack: Notify Error", "type": "main", "index": 0 }]]
+    }
+  },
+  "meta": {
+    "instanceId": "nexus-editorial",
+    "templateCredsSetupCompleted": false
+  },
+  "pinData": {}
+}

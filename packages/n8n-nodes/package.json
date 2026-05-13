@@ -1,0 +1,28 @@
+{
+  "name": "@nexus/n8n-nodes",
+  "version": "0.2.0",
+  "private": true,
+  "type": "module",
+  "description": "Custom n8n Code Node helpers reusable across the Nexus Editorial workflows.",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts",
+    "./normalizer": "./src/normalizer.ts",
+    "./apify-mappers": "./src/apify-mappers.ts",
+    "./date-utils": "./src/date-utils.ts"
+  },
+  "scripts": {
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@nexus/shared": "workspace:*",
+    "franc-min": "^6.2.0",
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "@types/node": "^20.14.10",
+    "typescript": "^5.5.3"
+  }
+}

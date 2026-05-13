@@ -1,0 +1,21 @@
+{
+  "name": "@nexus/scripts",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Operational CLIs (seed, retention dry-runs, voice pack ingestion).",
+  "scripts": {
+    "seed:watchlist": "tsx src/seed-watchlist.ts",
+    "test-collector": "tsx src/test-collector.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@nexus/n8n-nodes": "workspace:*",
+    "@nexus/shared": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "^20.14.10",
+    "tsx": "^4.16.2",
+    "typescript": "^5.5.3"
+  }
+}

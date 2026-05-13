@@ -1,0 +1,29 @@
+{
+  "name": "nexus-editorial",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Moteur hebdomadaire d'intelligence éditoriale LinkedIn pour Synvex",
+  "type": "module",
+  "scripts": {
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "lint": "biome lint .",
+    "format": "node tools/format.mjs",
+    "format:check": "node tools/format.mjs --check",
+    "check": "biome check .",
+    "supabase:migrate": "supabase db push",
+    "supabase:types": "supabase gen types typescript --local > packages/shared/src/db/types.ts",
+    "typecheck": "pnpm -r typecheck"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "1.8.3",
+    "@types/node": "^20.14.10",
+    "tsx": "^4.16.2",
+    "typescript": "^5.5.3",
+    "vitest": "^2.0.3"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "packageManager": "pnpm@9.5.0"
+}

@@ -1,0 +1,20 @@
+-- synvex_voice_pack seed template
+--
+-- Le voice pack est la mémoire stylistique de référence injectée en system
+-- prompt des agents 4, 6, 7 et 8. Les entrées sont catégorisées par `type` :
+--   - 'tone_rule'       : règles de ton (phrases courtes, pas de hype, etc.)
+--   - 'lexique_metier'  : termes assurance autorisés
+--   - 'lexique_banni'   : mots/expressions interdits
+--   - 'hook_banni'      : ouvertures interdites
+--   - 'reference_post'  : exemple de post calibré (à enrichir au fil du temps)
+--   - 'cta_rule'        : règles CTA
+--
+-- Le contenu réel est dans docs/synvex-voice-tone.md. Ce fichier sert à le
+-- pousser en base lors du bootstrap, via un script ou un import manuel.
+--
+-- Exemple :
+-- INSERT INTO synvex_voice_pack (type, content, weight, is_active) VALUES
+--   ('tone_rule',      'Phrases courtes, ponctuees. Sujet-verbe-complement.', 5, true),
+--   ('lexique_banni',  'disruption',                                         3, true),
+--   ('lexique_banni',  'synergie',                                           3, true),
+--   ('hook_banni',     'Et si je vous disais...',                            5, true);
