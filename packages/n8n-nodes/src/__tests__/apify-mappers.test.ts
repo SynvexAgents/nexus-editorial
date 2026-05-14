@@ -67,6 +67,22 @@ describe('mapHarvestApiProfilePosts()', () => {
     expect(result.post).toBeNull();
     expect(result.error_reason).toContain('minimal_schema_failed');
   });
+
+  it('skips comment items (type:"comment") without sending them to DLQ', () => {
+    // harvestapi/linkedin-profile-posts renvoie posts ET commentaires dans le
+    // même dataset quand scrapeComments=true. Les commentaires ne sont pas du
+    // contenu primaire — le mapper doit signaler skip:* (pas error).
+    const commentItem = {
+      id: '7459872062829047808',
+      type: 'comment',
+      actor: { name: 'Commentateur Lambda' },
+      commentary: 'Très intéressant ce post.',
+      postId: '7459549239333978112',
+    };
+    const result = mapHarvestApiProfilePosts(commentItem);
+    expect(result.post).toBeNull();
+    expect(result.error_reason).toBe('skip:comment_item');
+  });
 });
 
 describe('mapApiMaestroPost()', () => {

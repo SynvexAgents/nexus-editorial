@@ -99,6 +99,13 @@ export function mapHarvestApiProfilePosts(raw: unknown): MapResult {
   }
   const r = raw as Record<string, unknown>;
 
+  // harvestapi renvoie dans le même dataset les posts ET les commentaires reçus
+  // (quand scrapeComments=true). Les commentaires ont type:'comment' et ne sont
+  // pas du contenu primaire à analyser — on les skip silencieusement.
+  if (r.type === 'comment') {
+    return { post: null, error_reason: 'skip:comment_item' };
+  }
+
   const post_id = safeString(r.id ?? r.urn ?? r.postId);
   const author = (r.author ?? {}) as Record<string, unknown>;
   const author_id =

@@ -5,8 +5,21 @@
   "type": "module",
   "description": "Operational CLIs (seed, retention dry-runs, voice pack ingestion).",
   "scripts": {
-    "seed:watchlist": "tsx src/seed-watchlist.ts",
-    "test-collector": "tsx src/test-collector.ts",
+    "seed:watchlist": "tsx --env-file=../../.env src/seed-watchlist.ts",
+    "seed:arthur-waller": "tsx --env-file=../../.env src/seed-arthur-waller.ts",
+    "seed:watchlist-batch": "tsx --env-file=../../.env src/seed-watchlist-batch.ts",
+    "seed:watchlist-batch-v2": "tsx --env-file=../../.env src/seed-watchlist-batch-v2.ts",
+    "seed:watchlist-batch-v3": "tsx --env-file=../../.env src/seed-watchlist-batch-v3.ts",
+    "test-collector": "tsx --env-file=../../.env src/test-collector.ts",
+    "inspect-results": "tsx --env-file=../../.env src/inspect-results.ts",
+    "inspect-batch": "tsx --env-file=../../.env src/inspect-batch.ts",
+    "purge-dlq": "tsx --env-file=../../.env src/purge-dlq.ts",
+    "deactivate-anglophones": "tsx --env-file=../../.env src/deactivate-anglophones.ts",
+    "audit-language": "tsx --env-file=../../.env src/audit-language.ts",
+    "apify-cost": "tsx --env-file=../../.env src/apify-cost.ts",
+    "probe-apify": "tsx --env-file=../../.env src/probe-apify.ts",
+    "audit-watchlist": "tsx --env-file=../../.env src/audit-watchlist.ts",
+    "peek-raw": "tsx --env-file=../../.env src/peek-raw.ts",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {

@@ -72,7 +72,8 @@ async function callApifyActor(
 ): Promise<unknown[]> {
   const url = `https://api.apify.com/v2/acts/${apifyActorPath(actorId)}/run-sync-get-dataset-items?token=${token}`;
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 180_000);
+  // 300s : un batch de 30+ profils sur harvestapi prend > 3 min.
+  const timeout = setTimeout(() => controller.abort(), 300_000);
   try {
     const res = await fetch(url, {
       method: 'POST',
@@ -91,22 +92,27 @@ async function callApifyActor(
   }
 }
 
-async function runApifyWithFallback(
+function buildApifyInputForActor(
+  actorId: string,
   profiles: WatchlistProfile[],
-  token: string,
-): Promise<ApifyRunResult> {
-  const targetUrls = profiles.map((p) =>
-    p.profile_id.startsWith('http') ? p.profile_id : `https://www.linkedin.com/in/${p.profile_id}/`,
-  );
+): Record<string, unknown> {
+  // encodeURIComponent préserve A-Z a-z 0-9 - _ . ~ et encode le reste.
+  // Indispensable pour les slugs avec accents (Théo Lion, Pierre Bessé) : sans
+  // ça, LinkedIn ne reconnaît pas l'URL et Apify renvoie 0 post pour le profil.
+  const buildUrl = (slug: string): string =>
+    slug.startsWith('http') ? slug : `https://www.linkedin.com/in/${encodeURIComponent(slug)}/`;
+  const targetUrls = profiles.map((p) => buildUrl(p.profile_id));
   const sinceIso = new Date(Date.now() - 7 * 24 * 3600 * 1000).toISOString();
 
   const inputByActor: Record<string, Record<string, unknown>> = {
     'harvestapi/linkedin-profile-posts': {
       targetUrls,
       maxPosts: 10,
+      // scrapeComments désactivé : sur des batches > 20 profils, harvestapi
+      // sature et renvoie "fetch failed". On récupérera comment_sample plus
+      // tard via un appel séparé sur les post_id intéressants si besoin.
+      scrapeComments: false,
       scrapeReactions: false,
-      scrapeComments: true,
-      maxComments: 5,
       postedLimitDate: sinceIso,
       includeQuotePosts: false,
       includeReposts: false,
@@ -116,17 +122,83 @@ async function runApifyWithFallback(
       searchQueries: ['*'],
       maxPosts: 10,
       postedLimit: 'week',
+      scrapeComments: false,
+      scrapeReactions: false,
     },
     'apimaestro/linkedin-posts-search-scraper-no-cookies': {
       keyword: 'assurance OR courtage OR sinistres',
       total_posts: 20,
     },
   };
+  const input = inputByActor[actorId];
+  if (!input) throw new Error(`no apify input mapping for actor ${actorId}`);
+  return input;
+}
 
+// HarvestAPI sature au-delà de ~20 URLs par call. On batche en chunks de 15
+// avec retry par chunk pour tolérer un fail transient sans perdre tout le run.
+const PRIMARY_BATCH_SIZE = 15;
+
+async function callPrimaryBatched(
+  profiles: WatchlistProfile[],
+  actorId: string,
+  token: string,
+): Promise<unknown[]> {
+  const allItems: unknown[] = [];
+  let failedBatches = 0;
+  for (let i = 0; i < profiles.length; i += PRIMARY_BATCH_SIZE) {
+    const chunk = profiles.slice(i, i + PRIMARY_BATCH_SIZE);
+    const input = buildApifyInputForActor(actorId, chunk);
+    const batchIdx = i / PRIMARY_BATCH_SIZE;
+    let success = false;
+    for (let attempt = 1; attempt <= 2 && !success; attempt += 1) {
+      try {
+        const items = await callApifyActor(actorId, input, token);
+        allItems.push(...items);
+        logger.info(
+          {
+            actor_id: actorId,
+            batch: batchIdx,
+            size: chunk.length,
+            returned: items.length,
+            attempt,
+          },
+          'apify_chunk_done',
+        );
+        success = true;
+      } catch (err) {
+        logger.warn(
+          {
+            actor_id: actorId,
+            batch: batchIdx,
+            attempt,
+            err: err instanceof Error ? err.message : String(err),
+          },
+          'apify_chunk_retry',
+        );
+        if (attempt < 2) await new Promise((r) => setTimeout(r, 2_000));
+      }
+    }
+    if (!success) failedBatches += 1;
+  }
+  if (failedBatches > 0 && allItems.length === 0) {
+    throw new Error(`all_${failedBatches}_chunks_failed`);
+  }
+  return allItems;
+}
+
+async function runApifyWithFallback(
+  profiles: WatchlistProfile[],
+  token: string,
+): Promise<ApifyRunResult> {
   for (const actorId of ACTOR_CHAIN) {
     try {
-      logger.info({ actor_id: actorId }, 'apify_actor_attempt');
-      const items = await callApifyActor(actorId, inputByActor[actorId]!, token);
+      logger.info({ actor_id: actorId, profiles: profiles.length }, 'apify_actor_attempt');
+      const items =
+        actorId === 'harvestapi/linkedin-profile-posts' ||
+        actorId === 'harvestapi/linkedin-post-search'
+          ? await callPrimaryBatched(profiles, actorId, token)
+          : await callApifyActor(actorId, buildApifyInputForActor(actorId, profiles), token);
       if (items.length === 0) {
         logger.warn({ actor_id: actorId }, 'apify_actor_returned_empty');
         continue;
@@ -200,18 +272,50 @@ async function main(): Promise<void> {
   }
   log.info({ profiles_count: profiles.length }, 'watchlist_loaded');
 
+  // Dry-run gate : on construit et imprime ce qui SERAIT envoyé à Apify,
+  // mais on n'appelle pas l'API et on n'écrit pas en base.
+  if (args.dryRun) {
+    const primaryActor = ACTOR_CHAIN[0];
+    const apifyInput = buildApifyInputForActor(primaryActor, profiles);
+    process.stdout.write('\n========== DRY RUN ==========\n');
+    process.stdout.write(`Primary actor    : ${primaryActor}\n`);
+    process.stdout.write(`Fallback chain   : ${ACTOR_CHAIN.slice(1).join(', ')}\n`);
+    process.stdout.write(`Profiles targeted: ${profiles.length}\n`);
+    for (const p of profiles) {
+      process.stdout.write(`  - ${p.profile_id} (${p.nom})\n`);
+    }
+    process.stdout.write(`\nApify input payload (would be sent to ${primaryActor}):\n`);
+    process.stdout.write(`${JSON.stringify(apifyInput, null, 2)}\n`);
+    process.stdout.write('\nNo Apify call, no DB write. Dry-run exit.\n');
+    process.stdout.write('==============================\n\n');
+    return;
+  }
+
   // 2. Apify avec fallback
   const apifyRun = await runApifyWithFallback(profiles, apifyToken);
   const mapper = getMapperFor(apifyRun.actor_id as Parameters<typeof getMapperFor>[0]);
 
-  // 3. Mapping + DLQ tracking
+  // 3. Mapping + DLQ tracking. Les items dont le mapper renvoie une raison
+  //    commençant par `skip:` sont ignorés silencieusement.
+  //    Filtre supplémentaire : tout post dont l'auteur n'est pas dans la
+  //    watchlist active est skip — protège contre la FK violation quand le
+  //    fallback apimaestro (keyword search) renvoie des posts hors-watchlist.
+  const activeIds = new Set(profiles.map((p) => p.profile_id));
   const rawPostRows: RawPost[] = [];
   const dlqEntries: Array<{ raw_payload: unknown; error_reason: string; source_actor: string }> =
     [];
+  let skipped = 0;
+  let offWatchlist = 0;
   for (const item of apifyRun.raw_items) {
     const result = mapper(item);
     if (result.post) {
+      if (!activeIds.has(result.post.author_id)) {
+        offWatchlist += 1;
+        continue;
+      }
       rawPostRows.push(toRawPostRow(result.post, apifyRun.actor_id));
+    } else if (result.error_reason?.startsWith('skip:')) {
+      skipped += 1;
     } else {
       dlqEntries.push({
         raw_payload: item,
@@ -220,21 +324,10 @@ async function main(): Promise<void> {
       });
     }
   }
-  log.info({ mapped: rawPostRows.length, dlq: dlqEntries.length }, 'mapping_complete');
-
-  if (args.dryRun) {
-    log.info({ rawPostRows: rawPostRows.length }, 'dry_run_exit_before_db_writes');
-    printReport({
-      collected: rawPostRows.length,
-      dlq: dlqEntries.length,
-      kept: 0,
-      rejected: 0,
-      rejected_breakdown: {},
-      top_posts: [],
-      hour_bucket_summary: {},
-    });
-    return;
-  }
+  log.info(
+    { mapped: rawPostRows.length, dlq: dlqEntries.length, skipped, off_watchlist: offWatchlist },
+    'mapping_complete',
+  );
 
   // 4. UPSERT raw_posts + DLQ
   if (rawPostRows.length > 0) {
