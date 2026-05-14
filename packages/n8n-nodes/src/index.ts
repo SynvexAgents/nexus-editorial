@@ -121,5 +121,12 @@ export {
   parseHourBucket,
   recommendTiming,
 } from './agents/timing-recommender.js';
+// Notification — composeur d'email récap hebdo (utilisé par notify-weekly-report)
+export {
+  type ComposeEmailOptions,
+  type ComposeEmailOutput,
+  type WeeklyReportData,
+  composeWeeklyReportEmail,
+} from './agents/weekly-report-email.js';
 
 export const NEXUS_N8N_NODES_VERSION = '0.8.0';

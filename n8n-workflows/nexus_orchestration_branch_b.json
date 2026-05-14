@@ -1,0 +1,363 @@
+{
+  "name": "Nexus Editorial — Branch B (Agents 3 → 9 + Notify)",
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "saveDataErrorExecution": "all",
+    "saveDataSuccessExecution": "all",
+    "saveExecutionProgress": true,
+    "timezone": "Europe/Paris",
+    "errorWorkflow": ""
+  },
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "trg_manual",
+      "name": "Manual Trigger",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [240, 240]
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 22 * * 6"
+            }
+          ]
+        },
+        "notes": "Samedi 22:00 Europe/Paris. NE PAS ACTIVER tant que la branche A (collect & normalize) et le dashboard Lovable ne sont pas validés bout-en-bout. Activation prévue en tâche 9c."
+      },
+      "id": "trg_schedule",
+      "name": "Schedule Trigger Saturday 22h (disabled)",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.1,
+      "position": [240, 480],
+      "disabled": true
+    },
+    {
+      "parameters": {
+        "language": "javaScript",
+        "jsCode": "// Calcule la week_id ISO 8601 de la semaine courante (Europe/Paris).\n// Convention: la semaine ISO commence le lundi, et la semaine 1\n// contient le 1er jeudi de l'année.\nconst now = new Date();\nconst utc = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));\nconst dayNum = utc.getUTCDay() || 7;\nutc.setUTCDate(utc.getUTCDate() + 4 - dayNum);\nconst yearStart = new Date(Date.UTC(utc.getUTCFullYear(), 0, 1));\nconst week = Math.ceil(((utc.getTime() - yearStart.getTime()) / 86400000 + 1) / 7);\nconst weekId = `${utc.getUTCFullYear()}-W${String(week).padStart(2, '0')}`;\n// Calcule aussi le lundi 00:00 de la semaine (utile pour le filtre Supabase).\nconst monday = new Date(utc);\nmonday.setUTCDate(utc.getUTCDate() - 3); // utc est ajusté sur le jeudi de la semaine\nmonday.setUTCHours(0, 0, 0, 0);\nreturn [{ json: { week_id: weekId, week_start_iso: monday.toISOString() } }];\n",
+        "notes": "Source de vérité pour week_id. Toute la branche B propage ce champ via $node['Code: compute_week_id'].json.week_id."
+      },
+      "id": "code_week_id",
+      "name": "Code: compute_week_id",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [460, 360]
+    },
+    {
+      "parameters": {
+        "operation": "getAll",
+        "tableId": "clean_posts",
+        "returnAll": false,
+        "limit": 1,
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "is_relevant",
+              "condition": "eq",
+              "keyValue": "true"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "sb_check_volume",
+      "name": "Supabase: Check clean_posts Volume",
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [680, 360],
+      "credentials": {
+        "supabaseApi": {
+          "id": "{{SUPABASE_CREDENTIAL_ID}}",
+          "name": "Supabase Nexus"
+        }
+      },
+      "notes": "Vérifie qu'au moins 1 clean_post pertinent existe. Le check de volume détaillé (≥ 10 posts cette semaine) est implémenté dans le Code Node suivant qui requête Supabase via SDK pour pouvoir compter."
+    },
+    {
+      "parameters": {
+        "language": "javaScript",
+        "jsCode": "// Compte les clean_posts pertinents depuis le lundi de la semaine.\n// Utilise le client Supabase via $env (le runtime n8n a accès à process.env).\nconst { createClient } = require('@supabase/supabase-js');\nconst sb = createClient($env.SUPABASE_URL, $env.SUPABASE_SERVICE_ROLE_KEY);\nconst weekId = $node['Code: compute_week_id'].json.week_id;\nconst weekStartIso = $node['Code: compute_week_id'].json.week_start_iso;\nconst { count, error } = await sb\n  .from('clean_posts')\n  .select('post_id', { count: 'exact', head: true })\n  .eq('is_relevant', true);\nif (error) throw new Error('volume_check_failed: ' + error.message);\nconst sufficient = (count ?? 0) >= 10;\nreturn [{ json: { week_id: weekId, week_start_iso: weekStartIso, clean_posts_count: count ?? 0, sufficient } }];\n",
+        "notes": "Gate volume : on n'enclenche les 9 agents que si la base contient ≥ 10 clean_posts pertinents. Logique simple, à raffiner avec filter date si besoin."
+      },
+      "id": "code_volume_gate",
+      "name": "Code: volume_gate",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [900, 360]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{$json.sufficient}}",
+              "value2": true
+            }
+          ]
+        }
+      },
+      "id": "if_volume_ok",
+      "name": "IF volume_sufficient",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [1120, 360]
+    },
+    {
+      "parameters": {
+        "authentication": "webhook",
+        "webhookUri": "={{$env.SLACK_WEBHOOK_URL}}",
+        "text": "=:warning: Nexus Editorial — week_id={{$node['Code: compute_week_id'].json.week_id}} ABORT.\\nVolume clean_posts insuffisant ({{$node['Code: volume_gate'].json.clean_posts_count}} < 10).\\nLa branche A (collect) doit être relancée.",
+        "otherOptions": {}
+      },
+      "id": "slack_volume_abort",
+      "name": "Slack: Notify Volume Insufficient",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.2,
+      "position": [1340, 540]
+    },
+    {
+      "parameters": {
+        "command": "=pnpm --filter @nexus/scripts run-agent-3 -- --limit 100"
+      },
+      "id": "exec_agent3",
+      "name": "Execute: Agent 3 (PostAnalysis)",
+      "type": "n8n-nodes-base.executeCommand",
+      "typeVersion": 1,
+      "position": [1340, 240],
+      "retryOnFail": true,
+      "maxTries": 2,
+      "waitBetweenTries": 30000,
+      "notes": "Analyse en batch les clean_posts non encore analysés. Timeout effectif 600s côté shell (cf. setting n8n EXECUTIONS_TIMEOUT)."
+    },
+    {
+      "parameters": {
+        "command": "=pnpm --filter @nexus/scripts run-agent-4 -- --week-id {{$node['Code: compute_week_id'].json.week_id}}"
+      },
+      "id": "exec_agent4",
+      "name": "Execute: Agent 4 (LinkedinTrends)",
+      "type": "n8n-nodes-base.executeCommand",
+      "typeVersion": 1,
+      "position": [1560, 160],
+      "retryOnFail": true,
+      "maxTries": 2,
+      "waitBetweenTries": 30000,
+      "notes": "Synthèse LinkedinTrends. Tourne en parallèle de Agent 5."
+    },
+    {
+      "parameters": {
+        "command": "=pnpm --filter @nexus/scripts run-agent-5 -- --week-id {{$node['Code: compute_week_id'].json.week_id}}"
+      },
+      "id": "exec_agent5",
+      "name": "Execute: Agent 5 (InsuranceTrends)",
+      "type": "n8n-nodes-base.executeCommand",
+      "typeVersion": 1,
+      "position": [1560, 320],
+      "retryOnFail": true,
+      "maxTries": 2,
+      "waitBetweenTries": 30000,
+      "notes": "Synthèse InsuranceTrends (7 clusters Perplexity). Tourne en parallèle de Agent 4."
+    },
+    {
+      "parameters": {
+        "mode": "combineByPosition",
+        "options": {}
+      },
+      "id": "merge_45",
+      "name": "Merge: Wait Agents 4+5",
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 2.1,
+      "position": [1780, 240]
+    },
+    {
+      "parameters": {
+        "command": "=pnpm --filter @nexus/scripts run-agent-6 -- --week-id {{$node['Code: compute_week_id'].json.week_id}}"
+      },
+      "id": "exec_agent6",
+      "name": "Execute: Agent 6 (Angles Generator)",
+      "type": "n8n-nodes-base.executeCommand",
+      "typeVersion": 1,
+      "position": [2000, 240],
+      "retryOnFail": true,
+      "maxTries": 2,
+      "waitBetweenTries": 30000,
+      "notes": "Génère 8 angles via Claude Opus 4.7. Coût ~€0.21/run."
+    },
+    {
+      "parameters": {
+        "command": "=pnpm --filter @nexus/scripts run-agent-7 -- --week-id {{$node['Code: compute_week_id'].json.week_id}}"
+      },
+      "id": "exec_agent7",
+      "name": "Execute: Agent 7 (Winners Selector)",
+      "type": "n8n-nodes-base.executeCommand",
+      "typeVersion": 1,
+      "position": [2220, 240],
+      "retryOnFail": true,
+      "maxTries": 2,
+      "waitBetweenTries": 30000,
+      "notes": "Sélectionne 3 winners complémentaires + rédige les posts finaux. Opus 4.7. Coût ~€0.22/run."
+    },
+    {
+      "parameters": {
+        "command": "=pnpm --filter @nexus/scripts run-agent-8 -- --week-id {{$node['Code: compute_week_id'].json.week_id}}"
+      },
+      "id": "exec_agent8",
+      "name": "Execute: Agent 8 (Visual Decision)",
+      "type": "n8n-nodes-base.executeCommand",
+      "typeVersion": 1,
+      "position": [2440, 160],
+      "retryOnFail": true,
+      "maxTries": 2,
+      "waitBetweenTries": 30000,
+      "notes": "Décide pour chacun des 3 posts si un visuel est pertinent + gamma_prompt. Haiku 4.5. Coût ~€0.005/run."
+    },
+    {
+      "parameters": {
+        "command": "=pnpm --filter @nexus/scripts run-agent-9 -- --week-id {{$node['Code: compute_week_id'].json.week_id}}"
+      },
+      "id": "exec_agent9",
+      "name": "Execute: Agent 9 (Timing Recommendation)",
+      "type": "n8n-nodes-base.executeCommand",
+      "typeVersion": 1,
+      "position": [2440, 320],
+      "retryOnFail": true,
+      "maxTries": 2,
+      "waitBetweenTries": 30000,
+      "notes": "Déterministe TypeScript pur, ~1ms, €0. Calcule jour+heure recommandés par post."
+    },
+    {
+      "parameters": {
+        "mode": "combineByPosition",
+        "options": {}
+      },
+      "id": "merge_89",
+      "name": "Merge: Wait Agents 8+9",
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 2.1,
+      "position": [2660, 240]
+    },
+    {
+      "parameters": {
+        "language": "javaScript",
+        "jsCode": "// Vérifie que weekly_reports a bien les 6 colonnes JSON alimentées\n// pour la week_id de la run.\nconst { createClient } = require('@supabase/supabase-js');\nconst sb = createClient($env.SUPABASE_URL, $env.SUPABASE_SERVICE_ROLE_KEY);\nconst weekId = $node['Code: compute_week_id'].json.week_id;\nconst { data, error } = await sb\n  .from('weekly_reports')\n  .select('week_id, linkedin_trends_json, insurance_trends_json, angles_json, winners_json, visuals_json, timing_json')\n  .eq('week_id', weekId)\n  .maybeSingle();\nif (error) throw new Error('weekly_reports_select_failed: ' + error.message);\nif (!data) throw new Error('weekly_reports_row_missing: ' + weekId);\nconst missing = [];\nif (!data.linkedin_trends_json) missing.push('linkedin_trends_json');\nif (!data.insurance_trends_json) missing.push('insurance_trends_json');\nif (!data.angles_json) missing.push('angles_json');\nif (!data.winners_json) missing.push('winners_json');\nif (!data.visuals_json) missing.push('visuals_json');\nif (!data.timing_json) missing.push('timing_json');\nif (missing.length > 0) {\n  throw new Error('incomplete_weekly_report: missing=' + missing.join(','));\n}\nreturn [{ json: { week_id: weekId, complete: true, columns_ok: 6 } }];\n",
+        "notes": "Gate qualité avant notification. Si une colonne JSON est manquante, on throw et l'Error Trigger global capture."
+      },
+      "id": "code_validate_complete",
+      "name": "Code: validate_weekly_complete",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [2880, 240]
+    },
+    {
+      "parameters": {
+        "command": "=pnpm --filter @nexus/scripts notify-weekly-report -- --week-id {{$node['Code: compute_week_id'].json.week_id}}"
+      },
+      "id": "exec_notify",
+      "name": "Execute: Notify Weekly Report (Resend)",
+      "type": "n8n-nodes-base.executeCommand",
+      "typeVersion": 1,
+      "position": [3100, 240],
+      "retryOnFail": true,
+      "maxTries": 2,
+      "waitBetweenTries": 30000,
+      "notes": "Envoie l'email récap dimanche 8h via Resend. En l'état, l'envoi est immédiat (samedi 22h+). Pour un envoi différé dimanche 08h, séparer en deux workflows : (1) ce workflow tourne samedi 22h, écrit weekly_reports complet ; (2) un Schedule Trigger autonome tourne dimanche 08h, lit weekly_reports, déclenche notify-weekly-report."
+    },
+    {
+      "parameters": {},
+      "id": "trg_error",
+      "name": "Error Trigger",
+      "type": "n8n-nodes-base.errorTrigger",
+      "typeVersion": 1,
+      "position": [240, 760]
+    },
+    {
+      "parameters": {
+        "authentication": "webhook",
+        "webhookUri": "={{$env.SLACK_WEBHOOK_URL}}",
+        "text": "=:rotating_light: Nexus Editorial — Branch B FAILURE.\\nweek_id: {{$node['Code: compute_week_id'].json.week_id}}\\nNode failed: {{$json.execution.lastNodeExecuted}}\\nRun id: {{$execution.id}}\\nError: {{$json.execution.error.message}}\\nTimestamp: {{$now.toISO()}}",
+        "otherOptions": {}
+      },
+      "id": "slack_error",
+      "name": "Slack: Notify Error",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.2,
+      "position": [460, 760]
+    }
+  ],
+  "connections": {
+    "Manual Trigger": {
+      "main": [[{ "node": "Code: compute_week_id", "type": "main", "index": 0 }]]
+    },
+    "Schedule Trigger Saturday 22h (disabled)": {
+      "main": [[{ "node": "Code: compute_week_id", "type": "main", "index": 0 }]]
+    },
+    "Code: compute_week_id": {
+      "main": [[{ "node": "Supabase: Check clean_posts Volume", "type": "main", "index": 0 }]]
+    },
+    "Supabase: Check clean_posts Volume": {
+      "main": [[{ "node": "Code: volume_gate", "type": "main", "index": 0 }]]
+    },
+    "Code: volume_gate": {
+      "main": [[{ "node": "IF volume_sufficient", "type": "main", "index": 0 }]]
+    },
+    "IF volume_sufficient": {
+      "main": [
+        [{ "node": "Execute: Agent 3 (PostAnalysis)", "type": "main", "index": 0 }],
+        [{ "node": "Slack: Notify Volume Insufficient", "type": "main", "index": 0 }]
+      ]
+    },
+    "Execute: Agent 3 (PostAnalysis)": {
+      "main": [
+        [
+          { "node": "Execute: Agent 4 (LinkedinTrends)", "type": "main", "index": 0 },
+          { "node": "Execute: Agent 5 (InsuranceTrends)", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "Execute: Agent 4 (LinkedinTrends)": {
+      "main": [[{ "node": "Merge: Wait Agents 4+5", "type": "main", "index": 0 }]]
+    },
+    "Execute: Agent 5 (InsuranceTrends)": {
+      "main": [[{ "node": "Merge: Wait Agents 4+5", "type": "main", "index": 1 }]]
+    },
+    "Merge: Wait Agents 4+5": {
+      "main": [[{ "node": "Execute: Agent 6 (Angles Generator)", "type": "main", "index": 0 }]]
+    },
+    "Execute: Agent 6 (Angles Generator)": {
+      "main": [[{ "node": "Execute: Agent 7 (Winners Selector)", "type": "main", "index": 0 }]]
+    },
+    "Execute: Agent 7 (Winners Selector)": {
+      "main": [
+        [
+          { "node": "Execute: Agent 8 (Visual Decision)", "type": "main", "index": 0 },
+          { "node": "Execute: Agent 9 (Timing Recommendation)", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "Execute: Agent 8 (Visual Decision)": {
+      "main": [[{ "node": "Merge: Wait Agents 8+9", "type": "main", "index": 0 }]]
+    },
+    "Execute: Agent 9 (Timing Recommendation)": {
+      "main": [[{ "node": "Merge: Wait Agents 8+9", "type": "main", "index": 1 }]]
+    },
+    "Merge: Wait Agents 8+9": {
+      "main": [[{ "node": "Code: validate_weekly_complete", "type": "main", "index": 0 }]]
+    },
+    "Code: validate_weekly_complete": {
+      "main": [[{ "node": "Execute: Notify Weekly Report (Resend)", "type": "main", "index": 0 }]]
+    },
+    "Error Trigger": {
+      "main": [[{ "node": "Slack: Notify Error", "type": "main", "index": 0 }]]
+    }
+  },
+  "meta": {
+    "instanceId": "nexus-editorial",
+    "templateCredsSetupCompleted": false
+  },
+  "pinData": {}
+}
