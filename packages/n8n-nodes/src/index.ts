@@ -99,5 +99,27 @@ export {
   type WinnersValidationReport,
   postProcessWinners,
 } from './agents/winners-post-processor.js';
+// Agent 8 — Visual Decision
+export {
+  type DecideVisualsOptions,
+  type DecideVisualsResult,
+  type UsageSummary as VisualsUsageSummary,
+  type VisualsArray,
+  SYSTEM_PROMPT_VISUAL,
+  decideVisuals,
+  visualsArraySchema,
+} from './agents/visual-decision.js';
+export {
+  type PostProcessVisualsOutput,
+  type VisualOverride,
+  type VisualsValidationReport,
+  postProcessVisuals,
+} from './agents/visual-decision-post-processor.js';
+// Agent 9 — Timing Recommendation (déterministe TypeScript)
+export {
+  type RecommendTimingOutput,
+  parseHourBucket,
+  recommendTiming,
+} from './agents/timing-recommender.js';
 
-export const NEXUS_N8N_NODES_VERSION = '0.7.0';
+export const NEXUS_N8N_NODES_VERSION = '0.8.0';
