@@ -267,8 +267,96 @@ describe('synthesizeTrends — system prompt embeds context brief and voice tone
     expect(AGENT_4_SYSTEM_PROMPT).toMatch(/Vouvoiement/i);
     expect(AGENT_4_SYSTEM_PROMPT).toMatch(/Lexique banni/i);
     expect(AGENT_4_SYSTEM_PROMPT).toContain('LinkedinTrends');
-    expect(AGENT_4_SYSTEM_PROMPT).toContain('Data quality warning');
+    // Le wording "data quality warning" en minuscule apparaît dans la règle
+    // conditionnelle (cf. fix 2). On ne teste plus la version capitalisée
+    // qui a disparu avec le renforcement.
+    expect(AGENT_4_SYSTEM_PROMPT).toMatch(/data quality warning/i);
     expect(AGENT_4_SYSTEM_PROMPT_STATS.approx_tokens).toBeGreaterThan(800);
+  });
+});
+
+// ===========================================================================
+// Tests des 3 fixes (sort strict, data quality conditional, baseline mention)
+// ===========================================================================
+
+describe('synthesizeTrends — fix 1 : tri strict par avg_engagement_norm (ignore fréquence)', () => {
+  it("preserves Claude's strict avg_engagement_norm ordering even when low-freq item ranks first", async () => {
+    // Mock simule la sortie Claude APRÈS application du fix : hook_A
+    // (engagement 20, freq 1) doit venir AVANT hook_B (engagement 15, freq 5).
+    const trends: LinkedinTrends = {
+      ...VALID_TRENDS,
+      top_hooks: [
+        { type: 'hook_A', frequency: 1, avg_engagement_norm: 20.0, example_post_id: 'p_A' },
+        { type: 'hook_B', frequency: 5, avg_engagement_norm: 15.0, example_post_id: 'p_B' },
+        { type: 'hook_C', frequency: 3, avg_engagement_norm: 5.0, example_post_id: 'p_C' },
+      ],
+    };
+    const { client } = mockClient([jsonResponseText(trends)]);
+    const result = await synthesizeTrends(buildInput(15), { client });
+
+    expect(result.trends.top_hooks[0]?.avg_engagement_norm).toBe(20.0);
+    expect(result.trends.top_hooks[1]?.avg_engagement_norm).toBe(15.0);
+    expect(result.trends.top_hooks[2]?.avg_engagement_norm).toBe(5.0);
+  });
+
+  it('system prompt enforces tri strict par engagement (wording explicit)', () => {
+    expect(AGENT_4_SYSTEM_PROMPT).toMatch(
+      /tri\s+STRICT\s+par\s+`avg_engagement_norm`\s+D[ÉE]CROISSANT/i,
+    );
+    expect(AGENT_4_SYSTEM_PROMPT).toMatch(/fréquence n'entre PAS dans le critère de tri/i);
+    expect(AGENT_4_SYSTEM_PROMPT).toMatch(
+      /TOUJOURS par `avg_engagement_norm` décroissant, JAMAIS par fréquence/i,
+    );
+  });
+});
+
+describe('synthesizeTrends — fix 2 : data quality warning conditionnel strict', () => {
+  it('synthese contains no warning when Claude obeys the conditional rule (all diversities ≥ 3)', async () => {
+    const trendsCleanSynth: LinkedinTrends = {
+      ...VALID_TRENDS,
+      synthese_textuelle:
+        'La semaine W20 confirme la dominance de la confession ancrée en chiffres concrets. Mardi 08h-10h reste le créneau le plus dense. Trois mécaniques récurrentes : contraste explicite, chiffre en ancrage, démontage de croyance établie. Transferabilité assurance globalement faible — la matière dominante reste hors registre direct.',
+    };
+    const { client } = mockClient([jsonResponseText(trendsCleanSynth)]);
+    const highDiversityPosts: PostAnalysisEnriched[] = Array.from({ length: 15 }, (_, i) =>
+      makeEnriched(i),
+    );
+    const result = await synthesizeTrends(
+      { week_id: '2026-W20', post_analyses: highDiversityPosts, temporal_rows: TEMPORAL_ROWS },
+      { client },
+    );
+    expect(result.trends.synthese_textuelle).not.toMatch(/data quality warning/i);
+    expect(result.trends.synthese_textuelle).not.toMatch(/diversité éditoriale limitée/i);
+  });
+
+  it('system prompt enforces the strict conditional (UNIQUEMENT SI < 3)', () => {
+    expect(AGENT_4_SYSTEM_PROMPT).toMatch(
+      /UNIQUEMENT SI au moins une des trois diversités est INFÉRIEURE à 3/i,
+    );
+    expect(AGENT_4_SYSTEM_PROMPT).toMatch(/n'ajoute AUCUNE note de data quality/i);
+  });
+});
+
+describe('synthesizeTrends — fix 3 : mention "baseline" obligatoire quand rising/falling vides', () => {
+  it('synthese contains "baseline" when rising_topics and falling_topics are both empty', async () => {
+    const trendsWithBaselineNote: LinkedinTrends = {
+      ...VALID_TRENDS,
+      rising_topics: [],
+      falling_topics: [],
+      synthese_textuelle:
+        'Baseline trop courte pour identifier des sujets en hausse ou en baisse cette semaine. Sur le contenu observé, la confession ancrée en chiffres domine, Mardi 08h-10h reste le créneau optimal. Transferabilité assurance limitée à un seul angle (formation IA RH transposable au courtage).',
+    };
+    const { client } = mockClient([jsonResponseText(trendsWithBaselineNote)]);
+    const result = await synthesizeTrends(buildInput(15), { client });
+
+    expect(result.trends.rising_topics).toHaveLength(0);
+    expect(result.trends.falling_topics).toHaveLength(0);
+    expect(result.trends.synthese_textuelle).toMatch(/baseline/i);
+  });
+
+  it('system prompt enforces NON OPTIONNELLE baseline mention rule', () => {
+    expect(AGENT_4_SYSTEM_PROMPT).toMatch(/baseline\s+trop\s+courte/i);
+    expect(AGENT_4_SYSTEM_PROMPT).toMatch(/NON OPTIONNELLE quand l'array est vide/i);
   });
 });
 

@@ -46,15 +46,15 @@ Aucun texte hors JSON. Aucun préambule. Aucune balise markdown.
 
 === CHAMPS DU JSON — RAPPEL DES CONTRAINTES ===
 
-1. \`top_hooks\` : array de 3 à 5 entrées. Chaque entrée = \`{ type, frequency, avg_engagement_norm, example_post_id }\`. Ordonne par \`avg_engagement_norm\` DÉCROISSANT (pas par fréquence brute). \`example_post_id\` = le post de ce hook_type avec le meilleur \`engagement_score_normalized\`.
+1. \`top_hooks\` : tri STRICT par \`avg_engagement_norm\` DÉCROISSANT. La fréquence n'entre PAS dans le critère de tri, elle est uniquement reportée dans le champ \`frequency\`. Exemple : si hook_A a avg_engagement_norm=16.27 (freq=3) et hook_B a avg_engagement_norm=3.99 (freq=1), alors hook_A vient en premier, hook_B en deuxième, peu importe les fréquences. Array de 3 à 5 entrées. Chaque entrée = \`{ type, frequency, avg_engagement_norm, example_post_id }\`. \`example_post_id\` = le post de ce hook_type avec le meilleur \`engagement_score_normalized\`.
 
-2. \`top_formats\` : idem mais sur \`format\`. 3 à 5 entrées. \`{ format, frequency, avg_engagement_norm }\`.
+2. \`top_formats\` : idem mais sur \`format\`. 3 à 5 entrées. Tri TOUJOURS par \`avg_engagement_norm\` décroissant, JAMAIS par fréquence. \`{ format, frequency, avg_engagement_norm }\`.
 
-3. \`top_topic_clusters\` : top 5 (max) des \`topic_specific\` (PAS topic_cluster — les spécifiques sont plus utiles). \`{ cluster, frequency, avg_engagement_norm }\`. La clé du champ s'appelle \`cluster\` mais le contenu est un topic_specific.
+3. \`top_topic_clusters\` : top 5 (max) des \`topic_specific\` (PAS topic_cluster — les spécifiques sont plus utiles). Tri TOUJOURS par \`avg_engagement_norm\` décroissant, JAMAIS par fréquence. \`{ cluster, frequency, avg_engagement_norm }\`. La clé du champ s'appelle \`cluster\` mais le contenu est un topic_specific.
 
-4. \`rising_topics\` : array de strings. Sujets (\`topic_specific\`) qui apparaissent ≥ 2 fois dans la semaine ET dont l'engagement moyen normalisé > 1.0. Si impossible à déterminer (pas de baseline historique, volume insuffisant), retourne \`[]\` et mentionne "baseline insuffisante" dans \`synthese_textuelle\`.
+4. \`rising_topics\` : array de strings. Sujets (\`topic_specific\`) qui apparaissent ≥ 2 fois dans la semaine ET dont l'engagement moyen normalisé > 1.0. Si rising_topics est retourné vide (parce qu'aucun topic_specific n'apparaît ≥ 2 fois, ou parce que l'échantillon est trop petit pour établir une tendance), tu DOIS mentionner explicitement dans \`synthese_textuelle\` la phrase "baseline trop courte pour identifier des sujets en hausse ou en baisse cette semaine" (ou un équivalent sec utilisant le mot "baseline"). Cette mention est NON OPTIONNELLE quand l'array est vide.
 
-5. \`falling_topics\` : array de strings. Sujets ≥ 2 fois ET engagement moyen < 0.8. Mêmes règles que rising.
+5. \`falling_topics\` : array de strings. Sujets \`topic_specific\` apparaissant ≥ 2 fois ET dont l'engagement moyen normalisé < 0.8. Mêmes règles que rising_topics : si l'array est retourné vide, mention obligatoire de "baseline trop courte" (ou équivalent contenant "baseline") dans \`synthese_textuelle\`. Une seule mention couvre les deux cas si les deux arrays sont vides.
 
 6. \`tone_dominant\` : string. Le ton majoritaire dans le TOP 10 posts par engagement_score_normalized. Valeur libre, mais reprends une des valeurs vues dans les post_analyses pour cohérence (\`lucide\`, \`provocateur\`, \`pédagogue\`, \`confessionnel\`, \`analytique\`, \`sec\`, \`inspirant\`).
 
@@ -72,13 +72,13 @@ Aucun texte hors JSON. Aucun préambule. Aucune balise markdown.
 
 13. \`synthese_textuelle\` : 5-10 lignes en français, ton Synvex (sec, lucide, analytique, vouvoiement). Réponds : ce qui ressort de la semaine, quels signaux à exploiter, quels archétypes dominants, quelle transferabilite assurance globale. Aucune mention de Synvex / produits Synvex. Aucune prescription. Sortie observationnelle.
 
-=== RÈGLES DATA QUALITY ===
+=== DATA QUALITY ===
 
-Calcule la diversité de tes inputs sur 3 axes : nombre de valeurs distinctes de \`hook_type\`, \`format\`, et \`ton\`. Si l'une de ces 3 mesures est < 3, ajoute dans \`synthese_textuelle\` une note explicite formulée :
+Comptabilise le nombre de valeurs distinctes pour \`hook_type\`, \`format\` et \`ton\` dans les post_analyses fournis.
 
-"Data quality warning : diversité éditoriale limitée cette semaine (hook_type: N, format: M, ton: P valeurs distinctes)."
+RÈGLE STRICTE : tu ajoutes dans \`synthese_textuelle\` la note "data quality warning : diversité éditoriale limitée cette semaine (hook_type: X, format: Y, ton: Z valeurs distinctes)" UNIQUEMENT SI au moins une des trois diversités est INFÉRIEURE à 3.
 
-Cette note précède la synthèse régulière. Si toutes les diversités sont ≥ 3, n'ajoute PAS de note de ce type.
+Si les trois diversités sont ≥ 3, n'ajoute AUCUNE note de data quality, ne mentionne pas du tout les chiffres de diversité dans la \`synthese_textuelle\`. La synthèse doit alors se concentrer sur le signal éditorial, pas sur la méta-mesure de diversité. Aucune occurrence du mot "data quality warning" ne doit apparaître quand toutes les diversités sont ≥ 3.
 
 === CONTRAINTES STRICTES ===
 
