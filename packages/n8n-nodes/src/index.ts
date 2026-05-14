@@ -54,5 +54,30 @@ export {
   type UrlVerifyResult,
   verifyUrls,
 } from './agents/url-verifier.js';
+// Agent 6 — Angles Generator
+export {
+  AGENT_6_SYSTEM_PROMPT,
+  AGENT_6_SYSTEM_PROMPT_STATS,
+} from './agents/agent-6-system-prompt.js';
+export {
+  type AnglesInput,
+  type AnglesResult,
+  type GenerateAnglesOptions,
+  type UsageSummary as AnglesUsageSummary,
+  generateAngles,
+} from './agents/angles-generator.js';
+export {
+  type AngleValidationFlag,
+  type AnglesValidationReport,
+  type PostProcessAnglesOutput,
+  postProcessAngles,
+} from './agents/angles-post-processor.js';
+export {
+  type MatchVoicePackOptions,
+  type SupabaseLike as VoicePackSupabaseLike,
+  type VoicePackEntry,
+  cosineSimilarity,
+  matchVoicePack,
+} from './agents/voice-pack-matcher.js';
 
-export const NEXUS_N8N_NODES_VERSION = '0.5.0';
+export const NEXUS_N8N_NODES_VERSION = '0.6.0';
