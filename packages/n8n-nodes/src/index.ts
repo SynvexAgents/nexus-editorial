@@ -79,5 +79,25 @@ export {
   cosineSimilarity,
   matchVoicePack,
 } from './agents/voice-pack-matcher.js';
+// Agent 7 — Winners Selector / Editorial Director
+export {
+  AGENT_7_SYSTEM_PROMPT,
+  AGENT_7_SYSTEM_PROMPT_STATS,
+} from './agents/agent-7-system-prompt.js';
+export {
+  type AngleScoringEntry,
+  type FusionProposed,
+  type SelectAndWriteWinnersOptions,
+  type SelectAndWriteWinnersResult,
+  type UsageSummary as WinnersUsageSummary,
+  type WinnersInput,
+  selectAndWriteWinners,
+} from './agents/winners-selector.js';
+export {
+  type PostProcessWinnersOutput,
+  type WinnerOverride,
+  type WinnersValidationReport,
+  postProcessWinners,
+} from './agents/winners-post-processor.js';
 
-export const NEXUS_N8N_NODES_VERSION = '0.6.0';
+export const NEXUS_N8N_NODES_VERSION = '0.7.0';

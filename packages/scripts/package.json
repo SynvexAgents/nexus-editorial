@@ -20,6 +20,7 @@
     "run-agent-4": "tsx --env-file=../../.env src/run-agent-4.ts",
     "run-agent-5": "tsx --env-file=../../.env src/run-agent-5.ts",
     "run-agent-6": "tsx --env-file=../../.env src/run-agent-6.ts",
+    "run-agent-7": "tsx --env-file=../../.env src/run-agent-7.ts",
     "apify-cost": "tsx --env-file=../../.env src/apify-cost.ts",
     "probe-apify": "tsx --env-file=../../.env src/probe-apify.ts",
     "audit-watchlist": "tsx --env-file=../../.env src/audit-watchlist.ts",
