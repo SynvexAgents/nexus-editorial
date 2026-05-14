@@ -16,6 +16,7 @@
     "purge-dlq": "tsx --env-file=../../.env src/purge-dlq.ts",
     "deactivate-anglophones": "tsx --env-file=../../.env src/deactivate-anglophones.ts",
     "audit-language": "tsx --env-file=../../.env src/audit-language.ts",
+    "run-agent-3": "tsx --env-file=../../.env src/run-agent-3.ts",
     "apify-cost": "tsx --env-file=../../.env src/apify-cost.ts",
     "probe-apify": "tsx --env-file=../../.env src/probe-apify.ts",
     "audit-watchlist": "tsx --env-file=../../.env src/audit-watchlist.ts",
@@ -24,7 +25,8 @@
   },
   "dependencies": {
     "@nexus/n8n-nodes": "workspace:*",
-    "@nexus/shared": "workspace:*"
+    "@nexus/shared": "workspace:*",
+    "dotenv": "^17.4.2"
   },
   "devDependencies": {
     "@types/node": "^20.14.10",

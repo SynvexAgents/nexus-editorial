@@ -7,5 +7,7 @@
 export * from './date-utils.js';
 export * from './apify-mappers.js';
 export * from './normalizer.js';
+export * from './agents/editorial-analyst.js';
+export { SYSTEM_PROMPT, SYSTEM_PROMPT_STATS } from './agents/system-prompt-builder.js';
 
-export const NEXUS_N8N_NODES_VERSION = '0.2.0';
+export const NEXUS_N8N_NODES_VERSION = '0.3.0';
