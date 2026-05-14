@@ -267,10 +267,11 @@ describe('synthesizeTrends — system prompt embeds context brief and voice tone
     expect(AGENT_4_SYSTEM_PROMPT).toMatch(/Vouvoiement/i);
     expect(AGENT_4_SYSTEM_PROMPT).toMatch(/Lexique banni/i);
     expect(AGENT_4_SYSTEM_PROMPT).toContain('LinkedinTrends');
-    // Le wording "data quality warning" en minuscule apparaît dans la règle
-    // conditionnelle (cf. fix 2). On ne teste plus la version capitalisée
-    // qui a disparu avec le renforcement.
-    expect(AGENT_4_SYSTEM_PROMPT).toMatch(/data quality warning/i);
+    // Le tri strict et le conditionnel data quality sont désormais gérés
+    // en post-processing déterministe (cf. trends-post-processor.ts). Le
+    // system prompt n'ajoute plus que la consigne "pas de méta-mesure".
+    expect(AGENT_4_SYSTEM_PROMPT).toMatch(/AUCUNE note de méta-mesure/i);
+    expect(AGENT_4_SYSTEM_PROMPT).toMatch(/post-processing/i);
     expect(AGENT_4_SYSTEM_PROMPT_STATS.approx_tokens).toBeGreaterThan(800);
   });
 });
@@ -299,13 +300,14 @@ describe('synthesizeTrends — fix 1 : tri strict par avg_engagement_norm (ignor
     expect(result.trends.top_hooks[2]?.avg_engagement_norm).toBe(5.0);
   });
 
-  it('system prompt enforces tri strict par engagement (wording explicit)', () => {
+  it('system prompt delegates ordering to post-processing (wording explicit)', () => {
+    // Le tri strict n'est plus une responsabilité du LLM — sorti vers
+    // trends-post-processor.ts. Le prompt doit refléter cette délégation
+    // pour ne pas demander à Claude un effort inutile (qui échouait).
+    expect(AGENT_4_SYSTEM_PROMPT).toMatch(/post-processing/i);
+    expect(AGENT_4_SYSTEM_PROMPT).toMatch(/ordre indifférent/i);
     expect(AGENT_4_SYSTEM_PROMPT).toMatch(
-      /tri\s+STRICT\s+par\s+`avg_engagement_norm`\s+D[ÉE]CROISSANT/i,
-    );
-    expect(AGENT_4_SYSTEM_PROMPT).toMatch(/fréquence n'entre PAS dans le critère de tri/i);
-    expect(AGENT_4_SYSTEM_PROMPT).toMatch(
-      /TOUJOURS par `avg_engagement_norm` décroissant, JAMAIS par fréquence/i,
+      /L'ordre dans la liste n'a pas d'importance, il sera trié en post-processing/i,
     );
   });
 });
@@ -329,11 +331,12 @@ describe('synthesizeTrends — fix 2 : data quality warning conditionnel strict'
     expect(result.trends.synthese_textuelle).not.toMatch(/diversité éditoriale limitée/i);
   });
 
-  it('system prompt enforces the strict conditional (UNIQUEMENT SI < 3)', () => {
-    expect(AGENT_4_SYSTEM_PROMPT).toMatch(
-      /UNIQUEMENT SI au moins une des trois diversités est INFÉRIEURE à 3/i,
-    );
-    expect(AGENT_4_SYSTEM_PROMPT).toMatch(/n'ajoute AUCUNE note de data quality/i);
+  it('system prompt forbids all meta-measure mentions (delegated to post-processing)', () => {
+    // Le conditionnel data quality n'est plus géré par le LLM. Le prompt
+    // demande désormais à Claude de NE JAMAIS écrire de méta-mesure ;
+    // le post-processor décide d'ajouter une note standardisée si nécessaire.
+    expect(AGENT_4_SYSTEM_PROMPT).toMatch(/AUCUNE note de méta-mesure/i);
+    expect(AGENT_4_SYSTEM_PROMPT).toMatch(/post-processing déterministe/i);
   });
 });
 

@@ -15,6 +15,7 @@ import type { LinkedinTrends, PostAnalysis, TemporalRow } from '@nexus/shared';
 import { linkedinTrendsSchema } from '@nexus/shared';
 import { AGENT_4_SYSTEM_PROMPT } from './agent-4-system-prompt.js';
 import { extractJsonFromPrefilledResponse } from './editorial-analyst.js';
+import { type PostProcessStats, postProcessTrends } from './trends-post-processor.js';
 
 // Pricing Haiku 4.5 — identique à Agent 3.
 const PRICE_INPUT_USD_PER_M = 1.0;
@@ -69,6 +70,8 @@ export interface TrendsResult {
   trends: LinkedinTrends;
   usage: UsageSummary;
   retried: boolean;
+  /** Stats du post-processing déterministe (tri / diversités / synthèse). */
+  post_process_stats: PostProcessStats;
 }
 
 interface AnthropicTextBlock {
@@ -196,10 +199,14 @@ export async function synthesizeTrends(
 
     const zodResult = linkedinTrendsSchema.safeParse(parsed);
     if (zodResult.success) {
+      // Post-processing déterministe : tri strict + diversités calculées
+      // depuis les inputs + nettoyage / insertion de la note diversité.
+      const postProcessed = postProcessTrends(zodResult.data, input);
       return {
-        trends: zodResult.data,
+        trends: postProcessed.trends,
         usage: computeCost(response.usage),
         retried: attempt > 1,
+        post_process_stats: postProcessed.stats,
       };
     }
 

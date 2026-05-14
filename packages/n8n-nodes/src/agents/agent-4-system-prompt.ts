@@ -46,11 +46,11 @@ Aucun texte hors JSON. Aucun préambule. Aucune balise markdown.
 
 === CHAMPS DU JSON — RAPPEL DES CONTRAINTES ===
 
-1. \`top_hooks\` : tri STRICT par \`avg_engagement_norm\` DÉCROISSANT. La fréquence n'entre PAS dans le critère de tri, elle est uniquement reportée dans le champ \`frequency\`. Exemple : si hook_A a avg_engagement_norm=16.27 (freq=3) et hook_B a avg_engagement_norm=3.99 (freq=1), alors hook_A vient en premier, hook_B en deuxième, peu importe les fréquences. Array de 3 à 5 entrées. Chaque entrée = \`{ type, frequency, avg_engagement_norm, example_post_id }\`. \`example_post_id\` = le post de ce hook_type avec le meilleur \`engagement_score_normalized\`.
+1. \`top_hooks\` : retourne 3 à 5 hook_types observés cette semaine. Pour chacun : \`type\` (la valeur hook_type), \`frequency\` (nombre d'occurrences), \`avg_engagement_norm\` (moyenne des engagement_score_normalized des posts de ce hook), \`example_post_id\` (post avec le score le plus haut pour ce hook). L'ordre dans la liste n'a pas d'importance, il sera trié en post-processing déterministe.
 
-2. \`top_formats\` : idem mais sur \`format\`. 3 à 5 entrées. Tri TOUJOURS par \`avg_engagement_norm\` décroissant, JAMAIS par fréquence. \`{ format, frequency, avg_engagement_norm }\`.
+2. \`top_formats\` : idem sur \`format\`. 3 à 5 entrées. \`{ format, frequency, avg_engagement_norm }\`. Ordre indifférent — post-processing trie.
 
-3. \`top_topic_clusters\` : top 5 (max) des \`topic_specific\` (PAS topic_cluster — les spécifiques sont plus utiles). Tri TOUJOURS par \`avg_engagement_norm\` décroissant, JAMAIS par fréquence. \`{ cluster, frequency, avg_engagement_norm }\`. La clé du champ s'appelle \`cluster\` mais le contenu est un topic_specific.
+3. \`top_topic_clusters\` : top 5 (max) des \`topic_specific\` (PAS topic_cluster — les spécifiques sont plus utiles). \`{ cluster, frequency, avg_engagement_norm }\`. La clé du champ s'appelle \`cluster\` mais le contenu est un topic_specific. Ordre indifférent — post-processing trie.
 
 4. \`rising_topics\` : array de strings. Sujets (\`topic_specific\`) qui apparaissent ≥ 2 fois dans la semaine ET dont l'engagement moyen normalisé > 1.0. Si rising_topics est retourné vide (parce qu'aucun topic_specific n'apparaît ≥ 2 fois, ou parce que l'échantillon est trop petit pour établir une tendance), tu DOIS mentionner explicitement dans \`synthese_textuelle\` la phrase "baseline trop courte pour identifier des sujets en hausse ou en baisse cette semaine" (ou un équivalent sec utilisant le mot "baseline"). Cette mention est NON OPTIONNELLE quand l'array est vide.
 
@@ -74,11 +74,7 @@ Aucun texte hors JSON. Aucun préambule. Aucune balise markdown.
 
 === DATA QUALITY ===
 
-Comptabilise le nombre de valeurs distinctes pour \`hook_type\`, \`format\` et \`ton\` dans les post_analyses fournis.
-
-RÈGLE STRICTE : tu ajoutes dans \`synthese_textuelle\` la note "data quality warning : diversité éditoriale limitée cette semaine (hook_type: X, format: Y, ton: Z valeurs distinctes)" UNIQUEMENT SI au moins une des trois diversités est INFÉRIEURE à 3.
-
-Si les trois diversités sont ≥ 3, n'ajoute AUCUNE note de data quality, ne mentionne pas du tout les chiffres de diversité dans la \`synthese_textuelle\`. La synthèse doit alors se concentrer sur le signal éditorial, pas sur la méta-mesure de diversité. Aucune occurrence du mot "data quality warning" ne doit apparaître quand toutes les diversités sont ≥ 3.
+N'ajoute AUCUNE note de méta-mesure (diversité, data quality, valeurs distinctes, etc.) dans \`synthese_textuelle\`. Concentre-toi sur le signal éditorial. La méta-mesure de diversité est calculée et mentionnée — si pertinent — par un post-processing déterministe qui s'exécute après ta sortie.
 
 === CONTRAINTES STRICTES ===
 
