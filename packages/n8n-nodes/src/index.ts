@@ -9,5 +9,16 @@ export * from './apify-mappers.js';
 export * from './normalizer.js';
 export * from './agents/editorial-analyst.js';
 export { SYSTEM_PROMPT, SYSTEM_PROMPT_STATS } from './agents/system-prompt-builder.js';
+export {
+  type PostAnalysisEnriched,
+  type TrendsInput,
+  type TrendsResult,
+  InsufficientVolumeError,
+  synthesizeTrends,
+} from './agents/linkedin-trends-synthesizer.js';
+export {
+  AGENT_4_SYSTEM_PROMPT,
+  AGENT_4_SYSTEM_PROMPT_STATS,
+} from './agents/agent-4-system-prompt.js';
 
-export const NEXUS_N8N_NODES_VERSION = '0.3.0';
+export const NEXUS_N8N_NODES_VERSION = '0.4.0';
