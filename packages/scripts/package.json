@@ -18,6 +18,7 @@
     "audit-language": "tsx --env-file=../../.env src/audit-language.ts",
     "run-agent-3": "tsx --env-file=../../.env src/run-agent-3.ts",
     "run-agent-4": "tsx --env-file=../../.env src/run-agent-4.ts",
+    "run-agent-5": "tsx --env-file=../../.env src/run-agent-5.ts",
     "apify-cost": "tsx --env-file=../../.env src/apify-cost.ts",
     "probe-apify": "tsx --env-file=../../.env src/probe-apify.ts",
     "audit-watchlist": "tsx --env-file=../../.env src/audit-watchlist.ts",
