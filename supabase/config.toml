@@ -37,7 +37,38 @@ enabled = false
 enabled = false
 
 [edge_runtime]
-enabled = false
+enabled = true
+# Permet d'invoquer les Edge Functions en local via `supabase functions serve`.
+# Les 11 functions sont auto-découvertes dans supabase/functions/*/index.ts.
+# Déploiement prod : `supabase functions deploy <name>` (cf. HANDOFF_EDGE_FUNCTIONS.md).
+inspector_port = 8083
+
+[functions.agent-3-post-analysis]
+verify_jwt = false  # Auth gérée par notre bearer SUPABASE_NEXUS_API_TOKEN.
+
+[functions.agent-4-linkedin-trends]
+verify_jwt = false
+
+[functions.agent-5-insurance-trends]
+verify_jwt = false
+
+[functions.agent-6-angles-generator]
+verify_jwt = false
+
+[functions.agent-7-editorial-director]
+verify_jwt = false
+
+[functions.agent-8-visual-decision]
+verify_jwt = false
+
+[functions.agent-9-timing-recommendation]
+verify_jwt = false
+
+[functions.collect-and-normalize]
+verify_jwt = false
+
+[functions.notify-weekly-report]
+verify_jwt = false
 
 [analytics]
 enabled = false

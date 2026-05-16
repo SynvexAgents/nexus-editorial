@@ -1,0 +1,17 @@
+{
+  "_comment": "Config Deno partagée pour les 11 Edge Functions Nexus. Le runtime Supabase auto-découvre chaque sous-dossier supabase/functions/*/index.ts.",
+  "imports": {
+    "@supabase/supabase-js": "https://esm.sh/@supabase/supabase-js@2.45.0",
+    "zod": "https://esm.sh/zod@3.23.8"
+  },
+  "compilerOptions": {
+    "allowJs": false,
+    "strict": true,
+    "lib": ["deno.window", "deno.ns"]
+  },
+  "lint": {
+    "rules": {
+      "exclude": ["no-explicit-any"]
+    }
+  }
+}
