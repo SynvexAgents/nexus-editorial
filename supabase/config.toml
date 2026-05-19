@@ -70,5 +70,11 @@ verify_jwt = false
 [functions.notify-weekly-report]
 verify_jwt = false
 
+[functions.mark-post-published]
+verify_jwt = false  # V2 Measurement Loop : auth via NEXUS_API_TOKEN.
+
+[functions.scrape-post-performance]
+verify_jwt = false  # V2 Measurement Loop : auth via NEXUS_API_TOKEN.
+
 [analytics]
 enabled = false

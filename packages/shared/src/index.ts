@@ -15,3 +15,5 @@ export * from './schemas/raw-post.schema.js';
 export * from './schemas/clean-post.schema.js';
 export * from './schemas/temporal-row.schema.js';
 export * from './schemas/apify-post.schema.js';
+
+export * from './rag-light.js';

@@ -1,0 +1,171 @@
+{
+  "name": "Nexus Measurement Loop",
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "saveDataErrorExecution": "all",
+    "saveDataSuccessExecution": "all",
+    "saveExecutionProgress": true,
+    "timezone": "Europe/Paris",
+    "errorWorkflow": ""
+  },
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "trg_manual",
+      "name": "Manual Trigger",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [240, 240]
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 6 * * *"
+            }
+          ]
+        },
+        "notes": "Tous les jours 6h00 Europe/Paris. NE PAS ACTIVER tant qu'un run manuel n'a pas été validé bout-en-bout."
+      },
+      "id": "trg_schedule",
+      "name": "Schedule Trigger 6h daily (disabled)",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.1,
+      "position": [240, 480],
+      "disabled": true
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "=https://jugcyqtweavrltmxdogg.supabase.co/rest/v1/published_posts?select=post_id,linkedin_url,published_at,scrape_d7_done,scrape_d14_done&archived=eq.false&next_scrape_at=lte.{{$now.toISO()}}&order=next_scrape_at.asc",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "httpHeaderAuth",
+        "options": {
+          "timeout": 15000,
+          "response": {
+            "response": {
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "id": "http_due_posts",
+      "name": "HTTP: List Due Posts",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [440, 360],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "KbDqihI57f1BHe5T",
+          "name": "Supabase apikey LinkedIn"
+        }
+      },
+      "notes": "GET published_posts.archived=false avec next_scrape_at <= now. Auth via Supabase apikey LinkedIn (service_role)."
+    },
+    {
+      "parameters": {
+        "language": "javaScript",
+        "jsCode": "// Decide which scrape (J+7 ou J+14) chaque post necessite, et emit un item\n// par scrape a executer. Aucune variable d'environnement, aucun fetch.\nconst now = new Date();\nconst SEVEN_DAYS = 7 * 24 * 60 * 60 * 1000;\nconst FOURTEEN_DAYS = 14 * 24 * 60 * 60 * 1000;\nconst items = $input.all();\n// Le HTTP node retourne {data: [...]} OU directement [...] selon config.\nconst rows = items.length === 1 && Array.isArray(items[0].json) ? items[0].json : items.map(i => i.json);\nconst out = [];\nfor (const r of rows) {\n  if (!r || !r.post_id || !r.published_at) continue;\n  const pubAt = new Date(r.published_at).getTime();\n  const age = now.getTime() - pubAt;\n  if (!r.scrape_d7_done && age >= SEVEN_DAYS) {\n    out.push({ json: { post_id: r.post_id, days_since_publish: 7, linkedin_url: r.linkedin_url } });\n  } else if (!r.scrape_d14_done && age >= FOURTEEN_DAYS) {\n    out.push({ json: { post_id: r.post_id, days_since_publish: 14, linkedin_url: r.linkedin_url } });\n  }\n}\nreturn out;\n",
+        "notes": "Split en un item par scrape a faire. Decide J+7 ou J+14 selon scrape_dX_done + age du post."
+      },
+      "id": "code_split_scrapes",
+      "name": "Code: split_scrapes",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [640, 360]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://jugcyqtweavrltmxdogg.supabase.co/functions/v1/scrape-post-performance",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"post_id\": \"{{$json.post_id}}\",\n  \"days_since_publish\": {{$json.days_since_publish}}\n}",
+        "options": {
+          "timeout": 180000,
+          "response": {
+            "response": {
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "id": "http_scrape",
+      "name": "HTTP: Scrape Post Performance",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [860, 360],
+      "retryOnFail": true,
+      "maxTries": 2,
+      "waitBetweenTries": 30000,
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "kljZJ1zyoo3gifGa",
+          "name": "Nexus API Token"
+        }
+      },
+      "notes": "POST scrape-post-performance Edge Function. Best-effort : un echec n'arrete pas la boucle pour les autres posts grace a continueOnFail."
+    },
+    {
+      "parameters": {},
+      "id": "trg_error",
+      "name": "Error Trigger",
+      "type": "n8n-nodes-base.errorTrigger",
+      "typeVersion": 1,
+      "position": [240, 720]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.resend.com/emails",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"from\": \"onboarding@resend.dev\",\n  \"to\": [\"aaa.projekt06@gmail.com\"],\n  \"subject\": \"Nexus Measurement Loop \\u2014 erreur cron\",\n  \"text\": \"Nexus Measurement Loop FAILURE.\\n\\nNode failed: {{$json.execution.lastNodeExecuted}}\\nRun id: {{$execution.id}}\\nError: {{$json.execution.error.message}}\\nTimestamp: {{$now.toISO()}}\\n\\nOuvrir l'execution : https://aaaprojekt.app.n8n.cloud/workflow/<measurement-workflow-id>/executions/{{$execution.id}}\\n\\n\\u2014 Nexus Editorial (Measurement Loop)\"\n}",
+        "options": {
+          "timeout": 30000,
+          "response": {
+            "response": {
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "id": "email_error",
+      "name": "Email: Notify Error",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [460, 720],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "M9YhYGFikCqXmIkZ",
+          "name": "Resend API"
+        }
+      },
+      "notes": "Email FAILURE via Resend depuis Error Trigger. Free tier."
+    }
+  ],
+  "connections": {
+    "Manual Trigger": {
+      "main": [[{ "node": "HTTP: List Due Posts", "type": "main", "index": 0 }]]
+    },
+    "Schedule Trigger 6h daily (disabled)": {
+      "main": [[{ "node": "HTTP: List Due Posts", "type": "main", "index": 0 }]]
+    },
+    "HTTP: List Due Posts": {
+      "main": [[{ "node": "Code: split_scrapes", "type": "main", "index": 0 }]]
+    },
+    "Code: split_scrapes": {
+      "main": [[{ "node": "HTTP: Scrape Post Performance", "type": "main", "index": 0 }]]
+    },
+    "Error Trigger": {
+      "main": [[{ "node": "Email: Notify Error", "type": "main", "index": 0 }]]
+    }
+  }
+}
