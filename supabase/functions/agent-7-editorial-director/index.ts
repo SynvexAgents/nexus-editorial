@@ -149,6 +149,9 @@ M. **MENTION CLIENTS EN GÉNÉRIQUE ANONYMISÉ** : jamais Phenomen/Henner/MSH. T
 JSON strict { "winners": [3 entrées], "all_scoring": [8 entrées]?, "fusions_proposees": [...]? }.
 Chaque winner :
 { post_position (1|2|3), winner_id, fusion_used (false ou [id1, id2]), scoring (array), rationale_strategique, post_final, hook_variantes (3 strings), cta_recommande, longueur_finale (int>0), checklist_qualite_passee (6 booleans), produit_synvex_ancrage (enum 9 produits — hérité de l'angle source) }.
+
+scoring : chaque entrée DOIT contenir { angle_id, score_total, sous_scores, commentaire }. Le champ sous_scores est OBLIGATOIRE — objet {engagement_potentiel, credibilite, autorite_synvex, transferabilite, risque} (5 entiers /10). Ne JAMAIS omettre sous_scores, même si le score_total est bas.
+
 Ordre post_position 1, 2, 3. Aucun texte hors JSON.`;
 }
 

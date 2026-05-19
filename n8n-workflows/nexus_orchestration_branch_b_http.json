@@ -251,15 +251,15 @@
     },
     {
       "parameters": {
-        "language": "javaScript",
-        "jsCode": "// Sync barrier Agent 4 (LinkedinTrends) + Agent 5 (InsuranceTrends).\n// Les 2 upstreams convergent ici sur input 0 ; n8n attend que les 2 soient terminés\n// avant de tirer ce Code node une seule fois avec les items aggreges.\n//\n// Tolere le format idempotent {skipped: true, reason, week_id} retourne par les\n// Edge Functions quand la synthese a deja ete faite pour cette week_id : on\n// continue normalement vers Agent 6, qui lit ses inputs directement en DB.\n//\n// Aucune variable d'environnement, aucun fetch — uniquement $input et $node.\nconst allItems = $input.all();\nconst weekId = allItems[0]?.json?.week_id ?? allItems[1]?.json?.week_id ?? $node['Code: compute_week_id'].json.week_id;\nconst skipped = allItems.every(it => it?.json?.skipped === true);\nreturn [{ json: { week_id: weekId, agents_4_5_done: true, both_skipped: skipped, items_count: allItems.length } }];\n",
-        "notes": "Sync barrier 4+5 (remplace n8n Merge node). Attend les 2 upstreams sur input 0, propage week_id vers Agent 6. Gere le cas idempotence skipped=true."
+        "mode": "combineByPosition",
+        "options": {}
       },
-      "id": "code_merge_4_5",
-      "name": "Code: merge_4_5",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
-      "position": [1560, 240]
+      "id": "merge_4_5",
+      "name": "Merge: Wait Agents 4+5",
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 2.1,
+      "position": [1560, 240],
+      "notes": "Sync barrier 4+5. n8n-nodes-base.merge a 2 input slots EXPLICITES (index 0 et 1) — necessaire pour que les 2 upstreams firent en parallele et que le node attende les 2 avant de tirer Agent 6. Fan-in sur input 0 unique (tente avec Code) ne marche PAS : n8n drop le 2e upstream."
     },
     {
       "parameters": {
@@ -399,15 +399,15 @@
     },
     {
       "parameters": {
-        "language": "javaScript",
-        "jsCode": "// Sync barrier Agent 8 (VisualDecision) + Agent 9 (Timing).\n// Les 2 upstreams convergent ici sur input 0 ; n8n attend que les 2 soient terminés\n// avant de tirer ce Code node une seule fois avec les items aggreges.\n//\n// Tolere le format idempotent {skipped: true, reason, week_id} si les decisions\n// visuelles/timing ont deja ete persistees pour cette week_id.\n//\n// Aucune variable d'environnement, aucun fetch — uniquement $input et $node.\nconst allItems = $input.all();\nconst weekId = allItems[0]?.json?.week_id ?? allItems[1]?.json?.week_id ?? $node['Code: compute_week_id'].json.week_id;\nconst skipped = allItems.every(it => it?.json?.skipped === true);\nreturn [{ json: { week_id: weekId, agents_8_9_done: true, both_skipped: skipped, items_count: allItems.length } }];\n",
-        "notes": "Sync barrier 8+9 (remplace n8n Merge node). Attend les 2 upstreams sur input 0, propage week_id vers HTTP Validate. Gere idempotence skipped=true."
+        "mode": "combineByPosition",
+        "options": {}
       },
-      "id": "code_merge_8_9",
-      "name": "Code: merge_8_9",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
-      "position": [2440, 240]
+      "id": "merge_8_9",
+      "name": "Merge: Wait Agents 8+9",
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 2.1,
+      "position": [2440, 240],
+      "notes": "Sync barrier 8+9. n8n-nodes-base.merge a 2 input slots EXPLICITES (index 0 et 1). Idempotence skipped des Edge Functions Agent 8/9 ne necessite pas de logique speciale ici : Validate Weekly Complete lit weekly_reports direct en DB."
     },
     {
       "parameters": {
@@ -617,7 +617,7 @@
       "main": [
         [
           {
-            "node": "Code: merge_4_5",
+            "node": "Merge: Wait Agents 4+5",
             "type": "main",
             "index": 0
           }
@@ -628,9 +628,9 @@
       "main": [
         [
           {
-            "node": "Code: merge_4_5",
+            "node": "Merge: Wait Agents 4+5",
             "type": "main",
-            "index": 0
+            "index": 1
           }
         ]
       ]
@@ -666,7 +666,7 @@
       "main": [
         [
           {
-            "node": "Code: merge_8_9",
+            "node": "Merge: Wait Agents 8+9",
             "type": "main",
             "index": 0
           }
@@ -677,9 +677,9 @@
       "main": [
         [
           {
-            "node": "Code: merge_8_9",
+            "node": "Merge: Wait Agents 8+9",
             "type": "main",
-            "index": 0
+            "index": 1
           }
         ]
       ]
@@ -717,7 +717,7 @@
         ]
       ]
     },
-    "Code: merge_4_5": {
+    "Merge: Wait Agents 4+5": {
       "main": [
         [
           {
@@ -728,7 +728,7 @@
         ]
       ]
     },
-    "Code: merge_8_9": {
+    "Merge: Wait Agents 8+9": {
       "main": [
         [
           {

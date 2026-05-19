@@ -161,6 +161,7 @@ Schéma chaque winner :
   "winner_id": "W20-A1" ou "F1" (si fusion),
   "fusion_used": false ou ["W20-A2", "W20-A6"],
   "scoring": [ { angle_id, score_total, sous_scores, commentaire }, ... ],
+                ↑ OBLIGATOIRE — chaque entrée scoring DOIT contenir les 5 sous_scores (engagement_potentiel, credibilite, autorite_synvex, transferabilite, risque) même si le score_total est bas. Ne JAMAIS omettre sous_scores.
                           ↑ contient l'entrée scoring de l'angle (ou des 2 angles si fusion) qui ALIMENTE ce winner uniquement
   "rationale_strategique": "4-6 lignes expliquant pourquoi ce winner est dans le trio (complémentarité archétype/ICP/longueur + rotation produit)",
   "post_final": "le post LinkedIn complet, prêt à publier",

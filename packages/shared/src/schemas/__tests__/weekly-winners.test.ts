@@ -61,3 +61,59 @@ describe('weeklyWinnersSchema', () => {
     expect(result.success).toBe(false);
   });
 });
+
+describe('angleScoring.sous_scores tolerance (Opus 4.7 omet parfois ce champ)', () => {
+  it('defaults sous_scores to {} when Opus omits the field', () => {
+    const winnerWithoutSousScores = {
+      ...validFixture[0],
+      scoring: [
+        {
+          angle_id: 'W21-A1',
+          score_total: 0.61,
+          // sous_scores omis (régression observée en W21)
+          commentaire: 'Score bas — actualité faible.',
+        },
+      ],
+    };
+    const result = weeklyWinnersSchema.safeParse([
+      winnerWithoutSousScores,
+      validFixture[1],
+      validFixture[2],
+    ]);
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data[0]?.scoring[0]?.sous_scores).toEqual({});
+    }
+  });
+
+  it('preserves sous_scores when Opus provides them', () => {
+    const result = weeklyWinnersSchema.safeParse(validFixture);
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data[0]?.scoring[0]?.sous_scores).toMatchObject({
+        actualite: 0.9,
+        defendabilite: 0.8,
+      });
+    }
+  });
+
+  it('still rejects when another required field is missing (ex: commentaire)', () => {
+    const winnerMissingCommentaire = {
+      ...validFixture[0],
+      scoring: [
+        {
+          angle_id: 'W21-A1',
+          score_total: 0.61,
+          sous_scores: { actualite: 0.9 },
+          // commentaire absent → doit throw
+        },
+      ],
+    };
+    const result = weeklyWinnersSchema.safeParse([
+      winnerMissingCommentaire,
+      validFixture[1],
+      validFixture[2],
+    ]);
+    expect(result.success).toBe(false);
+  });
+});

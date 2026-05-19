@@ -6,7 +6,11 @@ export const postPositionEnum = z.union([z.literal(1), z.literal(2), z.literal(3
 const angleScoringSchema = z.object({
   angle_id: z.string().min(1),
   score_total: z.number(),
-  sous_scores: z.record(z.string(), z.number()),
+  // Opus 4.7 omet parfois sous_scores quand le score global est bas
+  // (notamment sur les angles non-retenus). On tolère l'omission en
+  // défaultant à un objet vide ; le post-processor et le rapport CLI
+  // gèrent déjà ce cas (cf. winners-selector.ts, run-agent-7.ts).
+  sous_scores: z.record(z.string(), z.number()).optional().default({}),
   commentaire: z.string().min(1),
 });
 

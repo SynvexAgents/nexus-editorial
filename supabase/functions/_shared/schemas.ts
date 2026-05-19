@@ -211,7 +211,9 @@ export const fusionUsedSchema = z.union([
 export const angleScoringSchema = z.object({
   angle_id: z.string().min(1),
   score_total: z.number(),
-  sous_scores: z.record(z.string(), z.number()),
+  // Opus 4.7 omet parfois sous_scores quand le score global est bas.
+  // On tolère l'omission en défaultant à un objet vide ; downstream OK.
+  sous_scores: z.record(z.string(), z.number()).optional().default({}),
   commentaire: z.string().min(1),
 });
 export const weeklyWinnerSchema = z.object({
