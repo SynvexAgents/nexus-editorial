@@ -251,15 +251,17 @@
     },
     {
       "parameters": {
-        "mode": "combineByPosition",
-        "options": {}
+        "mode": "chooseBranch",
+        "options": {
+          "outputData": "input1"
+        }
       },
       "id": "merge_4_5",
       "name": "Merge: Wait Agents 4+5",
       "type": "n8n-nodes-base.merge",
       "typeVersion": 2.1,
       "position": [1560, 240],
-      "notes": "Sync barrier 4+5. n8n-nodes-base.merge a 2 input slots EXPLICITES (index 0 et 1) — necessaire pour que les 2 upstreams firent en parallele et que le node attende les 2 avant de tirer Agent 6. Fan-in sur input 0 unique (tente avec Code) ne marche PAS : n8n drop le 2e upstream."
+      "notes": "Sync barrier 4+5. n8n-nodes-base.merge a 2 input slots EXPLICITES (index 0 et 1) — necessaire pour que les 2 upstreams firent en parallele et que le node attende les 2 avant de tirer Agent 6. mode=chooseBranch + outputData=input1 : on attend les 2 upstreams (Agent 4 input 0 + Agent 5 input 1) puis on propage uniquement les items de l'input 0 (Agent 4) vers Agent 6. Le mode par defaut combine-by-position retournait 0 item car combine 1+1 par position ne matchait pas → 'No output data returned'."
     },
     {
       "parameters": {
@@ -399,15 +401,17 @@
     },
     {
       "parameters": {
-        "mode": "combineByPosition",
-        "options": {}
+        "mode": "chooseBranch",
+        "options": {
+          "outputData": "input1"
+        }
       },
       "id": "merge_8_9",
       "name": "Merge: Wait Agents 8+9",
       "type": "n8n-nodes-base.merge",
       "typeVersion": 2.1,
       "position": [2440, 240],
-      "notes": "Sync barrier 8+9. n8n-nodes-base.merge a 2 input slots EXPLICITES (index 0 et 1). Idempotence skipped des Edge Functions Agent 8/9 ne necessite pas de logique speciale ici : Validate Weekly Complete lit weekly_reports direct en DB."
+      "notes": "Sync barrier 8+9. n8n-nodes-base.merge a 2 input slots EXPLICITES (index 0 et 1). mode=chooseBranch + outputData=input1 : on attend les 2 upstreams (Agent 8 input 0 + Agent 9 input 1) puis on propage uniquement les items de l'input 0 (Agent 8) vers Validate Weekly Complete. Le mode par defaut combine-by-position retournait 0 item → 'No output data returned'. Idempotence skipped non gere ici : Validate lit weekly_reports direct en DB."
     },
     {
       "parameters": {
