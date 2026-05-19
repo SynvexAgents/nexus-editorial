@@ -145,6 +145,31 @@ export const archetypeEnum = z.enum([
 export const longueurCibleEnum = z.enum(['court', 'moyen', 'long']);
 export const icpEnum = z.enum(['courtier', 'MGA', 'mutuelle', 'insurtech', 'dirigeant_general']);
 
+// v2 mai 2026 — catalogue Synvex 9 produits pour bridge produit.
+export const produitSynvexEnum = z.enum([
+  'Orion',
+  'Vega',
+  'Chiron',
+  'Argus',
+  'Helios',
+  'Hermès',
+  'Nexus',
+  'Atlas',
+  'Cortex',
+]);
+export type ProduitSynvex = z.infer<typeof produitSynvexEnum>;
+export const PRODUITS_SYNVEX: readonly ProduitSynvex[] = [
+  'Orion',
+  'Vega',
+  'Chiron',
+  'Argus',
+  'Helios',
+  'Hermès',
+  'Nexus',
+  'Atlas',
+  'Cortex',
+] as const;
+
 export const angleSchema = z.object({
   angle_id: z.string().regex(/^W\d{1,2}-A[1-8]$/),
   archetype: archetypeEnum,
@@ -159,6 +184,8 @@ export const angleSchema = z.object({
   ancrage_linkedin: z.string().min(1),
   icp_vise: icpEnum,
   risques: z.array(z.string()),
+  // v2 : optional pour backward compat (angles_json v1 sans le champ).
+  produit_synvex_ancrage: produitSynvexEnum.optional(),
 });
 export type Angle = z.infer<typeof angleSchema>;
 export const weeklyAnglesSchema = z.array(angleSchema).length(8);
@@ -198,6 +225,8 @@ export const weeklyWinnerSchema = z.object({
   cta_recommande: z.string().min(1),
   longueur_finale: z.number().int().positive(),
   checklist_qualite_passee: checklistQualiteSchema,
+  // v2 : optional pour backward compat (winners_json v1 sans le champ).
+  produit_synvex_ancrage: produitSynvexEnum.optional(),
 });
 export type WeeklyWinner = z.infer<typeof weeklyWinnerSchema>;
 export const weeklyWinnersSchema = z.array(weeklyWinnerSchema).length(3);

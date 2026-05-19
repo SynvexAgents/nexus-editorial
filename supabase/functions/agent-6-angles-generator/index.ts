@@ -8,23 +8,23 @@
 //
 // Spécificités Opus 4.7 : pas de prefill, pas de temperature.
 
-import { errorResponse, handleCorsPreflight, jsonResponse } from '../_shared/cors.ts';
-import { verifyAuth } from '../_shared/auth.ts';
-import { getSupabase } from '../_shared/supabase.ts';
-import { logger } from '../_shared/logger.ts';
-import { currentIsoWeek, extractWeekNumber } from '../_shared/week.ts';
-import { loadContextBrief, loadVoiceTone } from '../_shared/system_prompts.ts';
 import { callAnthropic, extractTextFromResponse } from '../_shared/anthropic.ts';
-import { computeAnthropicCost, OPUS_4_7 } from '../_shared/pricing.ts';
+import { verifyAuth } from '../_shared/auth.ts';
+import { errorResponse, handleCorsPreflight, jsonResponse } from '../_shared/cors.ts';
 import { extractJsonObject } from '../_shared/json_extract.ts';
+import { logger } from '../_shared/logger.ts';
+import { OPUS_4_7, computeAnthropicCost } from '../_shared/pricing.ts';
 import {
-  type Archetype,
   type Angle,
+  type Archetype,
   type InsuranceTrends,
   type LinkedinTrends,
   type WeeklyAngles,
   weeklyAnglesSchema,
 } from '../_shared/schemas.ts';
+import { getSupabase } from '../_shared/supabase.ts';
+import { loadContextBrief, loadVoiceTone } from '../_shared/system_prompts.ts';
+import { currentIsoWeek, extractWeekNumber } from '../_shared/week.ts';
 
 const REQUIRED_ARCHETYPES: Archetype[] = [
   'constat_lucide',
@@ -70,7 +70,7 @@ CRITIQUE :
 - Si pas de matière sur un archétype, génère-le quand même.
 - Aucun texte hors JSON.
 
-=== CHAMPS PAR ANGLE (12) ===
+=== CHAMPS PAR ANGLE (13 — v2 mai 2026) ===
 
 1. angle_id : W{numéro}-A{1..8} (placeholders OK, post-processing régénère).
 2. archetype : enum strict ci-dessus.
@@ -85,6 +85,7 @@ CRITIQUE :
 11. ancrage_linkedin : référence mécanique linkedin_trends.
 12. icp_vise : enum {courtier, MGA, mutuelle, insurtech, dirigeant_general}. VARIE (≥ 4 distincts sur 8).
 13. risques : 1-3 strings spécifiques (sinon ["aucun risque majeur identifié"]).
+14. produit_synvex_ancrage : enum strict parmi {Orion, Vega, Chiron, Argus, Helios, Hermès, Nexus, Atlas, Cortex}. Le produit Synvex que cet angle pré-positionne implicitement (Agent 7 héritera pour bridge subtil/moyen). Choisir selon les fiches §9 du context_brief (par ICP, mécanisme, problème). Respecter accents (Hermès).
 
 === RÈGLES PAR ARCHÉTYPE ===
 
@@ -99,17 +100,19 @@ CRITIQUE :
 
 === CONTRAINTES NON NÉGOCIABLES ===
 
-A. Aucune mention Synvex / Orion / Helios / Chiron / Hermès / Argus / Atlas / Cortex.
+A. Aucune mention Synvex / Orion / Vega / Chiron / Argus / Helios / Hermès / Nexus / Atlas / Cortex dans le contenu produit (hook_brut, these_centrale, etc.). Le champ produit_synvex_ancrage est l'EXCEPTION : il porte le nom du produit en métadonnée orchestration.
 B. Aucun lexique banni (cf. voice tone).
 C. Aucun hook banni.
 D. Aucun chiffre orphelin.
 E. Vouvoiement.
 F. Aucune flatterie ni prescription gratuite.
-G. Diversité forcée : 8 archétypes distincts, ≥ 4 ICP distincts, ≥ 2 longueurs distinctes.
+G. Diversité forcée : 8 archétypes distincts, ≥ 4 ICP distincts, ≥ 2 longueurs distinctes, AU MOINS 5 produits Synvex distincts sur les 8 angles (idéal : 8 produits différents).
+H. Stratégie éditoriale v2 : ton angle doit permettre à Agent 7 de placer un bridge produit SUBTIL (80%) ou MOYEN (20%) en fin de post, une mention IA (subtile/directe/démonstrative anonymisée), et un CTA implicite via question terrain ouverte.
+I. Mention clients en générique anonymisé : jamais d'entité nommée (jamais Phenomen, Henner, MSH). Formulations : "un de mes clients", "un opérateur récent", "sur un déploiement courtage", "dans une mutuelle régionale".
 
 === FORMAT SORTIE ===
 
-JSON strict : { "angles": [ { 12 champs } × 8 ] }. Aucun texte hors JSON. Pas de markdown.`;
+JSON strict : { "angles": [ { 14 champs } × 8 ] } avec le champ produit_synvex_ancrage en plus des 13 historiques. Aucun texte hors JSON. Pas de markdown.`;
 }
 
 function buildUserPrompt(input: {
@@ -140,7 +143,7 @@ ${JSON.stringify(input.insurance_trends, null, 2)}
 === INPUT 4 : voice_pack_excerpts ===
 ${vp}
 
-RAPPEL : 8 archétypes distincts (${REQUIRED_ARCHETYPES.join(', ')}), ≥ 4 ICP distincts, ≥ 2 longueurs distinctes, aucune mention Synvex/produits.`;
+RAPPEL : 8 archétypes distincts (${REQUIRED_ARCHETYPES.join(', ')}), ≥ 4 ICP distincts, ≥ 2 longueurs distinctes, AU MOINS 5 produits Synvex distincts (parmi Orion/Vega/Chiron/Argus/Helios/Hermès/Nexus/Atlas/Cortex), aucune mention Synvex dans le contenu du post (le nom produit reste en métadonnée \`produit_synvex_ancrage\` uniquement).`;
 }
 
 function validateArchetypeCoverage(angles: WeeklyAngles): string | null {
@@ -159,7 +162,7 @@ function postProcessAngles(angles: WeeklyAngles, weekId: string) {
   const weekNum = extractWeekNumber(weekId);
   let ancrageFlagged = 0;
   let emptyRisks = 0;
-  let synvexFlags: string[] = [];
+  const synvexFlags: string[] = [];
   const processed: Angle[] = angles.map((a, i) => {
     let m = { ...a, angle_id: `W${weekNum}-A${i + 1}` };
     if (!ANCRAGE_REGEX.test(m.ancrage_assurance)) ancrageFlagged += 1;

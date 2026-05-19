@@ -16,8 +16,8 @@ export function getEnv(name: string, fallback?: string): string | undefined {
 // l'opérateur qui exécute `supabase secrets set` lors du déploiement.
 // Chaque function en consomme un sous-ensemble.
 export const REQUIRED_SECRETS = [
-  // Auth interne
-  'SUPABASE_NEXUS_API_TOKEN',
+  // Auth interne (préfix SUPABASE_ réservé par Supabase CLI → on utilise NEXUS_)
+  'NEXUS_API_TOKEN',
   // Supabase
   'SUPABASE_URL',
   'SUPABASE_SERVICE_ROLE_KEY',

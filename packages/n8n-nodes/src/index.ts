@@ -128,5 +128,14 @@ export {
   type WeeklyReportData,
   composeWeeklyReportEmail,
 } from './agents/weekly-report-email.js';
+// v2 mai 2026 — équité rotation produits Synvex (consommé par Agent 7)
+export {
+  type ProductCoverageDict,
+  type SupabaseLike as ProductRotationSupabaseLike,
+  emptyCoverage,
+  getRecentlyCoveredProducts,
+  prioritizeProducts,
+  saturatedProducts,
+} from './agents/product-rotation.js';
 
-export const NEXUS_N8N_NODES_VERSION = '0.8.0';
+export const NEXUS_N8N_NODES_VERSION = '0.9.0';

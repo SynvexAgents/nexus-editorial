@@ -306,6 +306,72 @@ describe('postProcessAngles — fills empty risques with placeholder', () => {
   });
 });
 
+// ---------------------------------------------------------------------------
+// v2 mai 2026 — Tests produit Synvex (rotation + diversité)
+// ---------------------------------------------------------------------------
+
+describe('postProcessAngles — v2 produit Synvex ancrage', () => {
+  it('reports 8 distinct products when each angle uses a different product', () => {
+    const produits = [
+      'Orion',
+      'Vega',
+      'Chiron',
+      'Argus',
+      'Helios',
+      'Hermès',
+      'Nexus',
+      'Atlas',
+    ] as const;
+    const angles: WeeklyAngles = ARCHETYPES.map((a, i) =>
+      makeAngle({ archetype: a, produit_synvex_ancrage: produits[i] }, i),
+    ) as WeeklyAngles;
+    const result = postProcessAngles(angles, '2026-W20');
+    expect(result.validation_report.produits_synvex_distinct).toBe(8);
+    expect(result.validation_report.produit_synvex_diversity_ok).toBe(true);
+    expect(result.validation_report.produit_synvex_missing).toHaveLength(0);
+  });
+
+  it('flags angles without produit_synvex_ancrage (backward compat v1)', () => {
+    const angles: WeeklyAngles = ARCHETYPES.map((a, i) =>
+      makeAngle({ archetype: a }, i),
+    ) as WeeklyAngles;
+    const result = postProcessAngles(angles, '2026-W20');
+    expect(result.validation_report.produit_synvex_missing).toHaveLength(8);
+    expect(result.validation_report.produits_synvex_distinct).toBe(0);
+    expect(result.validation_report.produit_synvex_diversity_ok).toBe(false);
+  });
+
+  it('flags diversity insufficient when only 3 distinct products on 8 angles', () => {
+    // 3 produits seulement (Orion x3, Argus x3, Hermès x2) → diversité KO (< 5).
+    const cycle = ['Orion', 'Argus', 'Hermès'] as const;
+    const angles: WeeklyAngles = ARCHETYPES.map((a, i) =>
+      makeAngle({ archetype: a, produit_synvex_ancrage: cycle[i % 3] }, i),
+    ) as WeeklyAngles;
+    const result = postProcessAngles(angles, '2026-W20');
+    expect(result.validation_report.produits_synvex_distinct).toBe(3);
+    expect(result.validation_report.produit_synvex_diversity_ok).toBe(false);
+  });
+
+  it('accepts ≥ 5 distinct products as diversity_ok', () => {
+    const produits = [
+      'Orion',
+      'Vega',
+      'Chiron',
+      'Argus',
+      'Helios',
+      'Orion',
+      'Vega',
+      'Chiron',
+    ] as const;
+    const angles: WeeklyAngles = ARCHETYPES.map((a, i) =>
+      makeAngle({ archetype: a, produit_synvex_ancrage: produits[i] }, i),
+    ) as WeeklyAngles;
+    const result = postProcessAngles(angles, '2026-W20');
+    expect(result.validation_report.produits_synvex_distinct).toBe(5);
+    expect(result.validation_report.produit_synvex_diversity_ok).toBe(true);
+  });
+});
+
 describe('voice-pack-matcher — empty pack falls back gracefully', () => {
   it('returns [] when no active rows exist in voice_pack', async () => {
     const supabaseMock = {

@@ -15,6 +15,21 @@ export const longueurCibleEnum = z.enum(['court', 'moyen', 'long']);
 
 export const icpEnum = z.enum(['courtier', 'MGA', 'mutuelle', 'insurtech', 'dirigeant_general']);
 
+// Catalogue Synvex 2026 — 9 produits. Source de vérité pour la
+// rotation équitable de bridge produit (stratégie v2 mai 2026).
+// Cf. docs/synvex-context-brief.md §9 pour les fiches détaillées.
+export const produitSynvexEnum = z.enum([
+  'Orion', // Acquisition B2B done-for-you
+  'Vega', // Veille & réponse appels d'offres assurance
+  'Chiron', // Remboursement santé humaine+animale + pilotage S/P
+  'Argus', // Agent sinistres IARD pro + Control Layer
+  'Helios', // Pilotage sinistralité prévoyance / IJ
+  'Hermès', // Pilotage cabinet courtage (4 fuites)
+  'Nexus', // Performance Intelligence Platform transversale
+  'Atlas', // Agent IA quotidien cabinet courtage
+  'Cortex', // Plateforme IA sinistres bout-en-bout multi-marques
+]);
+
 export const angleSchema = z.object({
   angle_id: z.string().regex(/^W\d{1,2}-A[1-8]$/, {
     message: 'angle_id must match pattern W{week}-A{1..8}, e.g. W21-A3',
@@ -31,6 +46,11 @@ export const angleSchema = z.object({
   ancrage_linkedin: z.string().min(1),
   icp_vise: icpEnum,
   risques: z.array(z.string()),
+  // Champ v2 (mai 2026) : produit Synvex d'ancrage pour cet angle.
+  // .optional() pour rester backward compatible avec les angles_json
+  // produits en v1 (W19, W20). Toute génération v2 et au-delà doit
+  // toujours fournir le champ — validé en post-processing.
+  produit_synvex_ancrage: produitSynvexEnum.optional(),
 });
 
 export const weeklyAnglesSchema = z.array(angleSchema).length(8, {
@@ -40,5 +60,19 @@ export const weeklyAnglesSchema = z.array(angleSchema).length(8, {
 export type Archetype = z.infer<typeof archetypeEnum>;
 export type LongueurCible = z.infer<typeof longueurCibleEnum>;
 export type Icp = z.infer<typeof icpEnum>;
+export type ProduitSynvex = z.infer<typeof produitSynvexEnum>;
 export type Angle = z.infer<typeof angleSchema>;
 export type WeeklyAngles = z.infer<typeof weeklyAnglesSchema>;
+
+/** Liste fixe ordonnée des 9 produits. Utilisée pour la rotation équitable. */
+export const PRODUITS_SYNVEX: readonly ProduitSynvex[] = [
+  'Orion',
+  'Vega',
+  'Chiron',
+  'Argus',
+  'Helios',
+  'Hermès',
+  'Nexus',
+  'Atlas',
+  'Cortex',
+] as const;

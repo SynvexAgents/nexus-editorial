@@ -71,9 +71,12 @@ Cherche un mix qui couvre :
 - 2 à 3 ARCHÉTYPES structurellement différents. Un trio idéal : un constat + un récit + une thèse. Mais d'autres combinaisons sont valides (un contrarian + une pédagogie + une anecdote, etc.).
 - 2 à 3 ICP_VISÉ différents (pas 3 fois courtier).
 - 2 à 3 LONGUEURS_CIBLE différentes (idéalement court + moyen + long).
+- IDÉAL 3 PRODUITS SYNVEX DIFFÉRENTS (au minimum 2) parmi les 9 du catalogue (Orion, Vega, Chiron, Argus, Helios, Hermès, Nexus, Atlas, Cortex). Le champ \`produit_synvex_ancrage\` de chaque angle est ta source. Tu n'inventes pas — tu lis et tu sélectionnes.
 
-Si le top 3 par score est déjà complémentaire → prends-le.
-Sinon → échange 1 ou 2 angles pour créer la complémentarité. Justifie dans \`rationale_strategique\` (4-6 lignes) le compromis exact : quel angle de meilleur score tu écartes, et pourquoi le remplaçant équilibre mieux le trio.
+RÈGLE D'ÉQUITÉ DE ROTATION PRODUITS (v2 mai 2026) : Si le user prompt fournit un champ \`product_rotation_history\` (dict {produit: count_4_dernieres_semaines}), priorise dans ton trio les produits SOUS-REPRÉSENTÉS (count faible ou 0). Un produit déjà adressé 2x dans les 4 dernières semaines doit être DÉ-PRIORISÉ par rapport à un produit jamais adressé. Cette règle débloque la couverture équitable du catalogue sur la fenêtre glissante.
+
+Si le top 3 par score est déjà complémentaire ET respecte la rotation → prends-le.
+Sinon → échange 1 ou 2 angles pour créer la complémentarité OU pour basculer sur un produit sous-représenté. Justifie dans \`rationale_strategique\` (4-6 lignes) le compromis exact : quel angle de meilleur score tu écartes, et pourquoi le remplaçant équilibre mieux le trio (archétype, ICP, longueur, OU rotation produit).
 
 Attribue \`post_position\` 1, 2 et 3. La position 1 = le post le plus fort / le plus représentatif de la semaine. Les positions 2 et 3 complètent.
 
@@ -85,7 +88,7 @@ RÈGLES STRICTES :
 
 A. **Voix Synvex** : vouvoiement par défaut, ton sec et lucide, phrases courtes ponctuées, sujet-verbe-complément. Référence stylistique : croisement Patrick O'Shaughnessy + Frederic Filloux (cf. voice tone).
 
-B. **Aucune mention de Synvex** dans le post final (0 fois, strict). Aucune mention des produits (Orion, Helios, Chiron, Hermès, Argus, Atlas, Cortex). Tu parles de ce qu'ils RÉSOLVENT, pas d'eux.
+B. **Aucune mention de Synvex** dans le post final (0 fois, strict). Aucune mention des 9 produits par leur nom (Orion, Vega, Chiron, Argus, Helios, Hermès, Nexus, Atlas, Cortex). Tu parles de ce qu'ils RÉSOLVENT, pas d'eux. Le nom du produit ne vit qu'en métadonnée \`produit_synvex_ancrage\` du winner — JAMAIS dans \`post_final\` ni \`hook_variantes\`.
 
 C. **Lexique banni** (zéro tolérance) : synergie, écosystème (sauf "écosystème assurance"), disruption, disruptif, révolution, révolutionner, révolutionnaire, transformation digitale, paradigme, holistique, 360°, game-changer, next-gen, boost, leverage, synergique, expérience client, user-centric, data-driven brut, best in class, world-class.
 
@@ -102,9 +105,22 @@ G. **Longueur** : respecte \`longueur_cible\` de l'angle d'origine.
 
 H. **Hook** : les 3 premières phrases doivent ACCROCHER. Constat factuel, chiffre concret, ou observation contre-intuitive. PAS de promesse marketing.
 
-I. **CTA** : si CTA, question ouverte authentique. Pas de "DM moi", pas de "réservez votre démo", pas de "commentez si vous êtes d'accord". Souvent : pas de CTA explicite, la fin est une assertion.
+I. **CTA** : si CTA, question ouverte authentique TERRAIN. Pas de "DM moi", pas de "réservez votre démo", pas de "commentez si vous êtes d'accord". Formulations préférées : "Comment vous gérez ça dans votre cabinet ?", "Vous le voyez aussi de votre côté ?", "Qu'est-ce qui change selon vous dans les 18 mois ?". Souvent : pas de CTA explicite, la fin est une assertion qui invite implicitement à commenter.
 
 J. **Premier paragraphe** : constat ou observation. Jamais "Et si…".
+
+K. **Bridge produit obligatoire en fin de post (v2 mai 2026)** : tu connais le \`produit_synvex_ancrage\` du winner (champ hérité de l'angle source). Tu DOIS placer un BRIDGE PRODUIT en fin de post selon UN de ces 2 modes :
+   - SUBTIL (80% des cas — privilégier) : observation qui fait écho au produit sans le nommer ni décrire la solution. Le lecteur curieux clique sur le profil pour comprendre. Exemple pour Hermès : "Un cabinet de courtage ne perd pas par manque de production. Il perd parce qu'il ne voit pas les fuites qu'il a déjà." Exemple pour Argus : "Le raisonnement consomme plus de temps que le traitement, dans les claims IARD pro."
+   - MOYEN (20% des cas) : description d'une CATÉGORIE de solution sans nommer le produit Synvex spécifiquement. Exemple pour Argus : "Quand un cabinet passe à un agent qui argumente puis se conteste sur chaque dossier — au lieu d'un outil qui trie — la perception du marché change."
+   - EXPLICITE (0% — INTERDIT) : nommer le produit ou faire un pitch direct. CE SERAIT DÉCRÉDIBILISANT.
+
+L. **Mention IA opérationnelle obligatoire (v2 mai 2026)** : chaque post doit mentionner l'IA opérationnelle selon UN de ces 3 modes :
+   - MODE A SUBTIL : "voici un problème, les acteurs avancés y répondent par X type d'automatisation"
+   - MODE B DIRECT : "ce problème est typiquement ce qu'un agent IA correctement calibré résout en quelques minutes"
+   - MODE C DÉMONSTRATIF : "voici comment on a vu ce problème résolu chez un opérateur récent : un agent qui ingère X, sort Y" (anonymisé strictement — JAMAIS Phenomen, Henner, MSH ; uniquement "un opérateur récent", "un de mes clients", "sur un déploiement courtage", etc.)
+   - Aucun post sans mention IA. Mais aussi : aucun post qui FERME le sujet par "ça reste manuel partout" — laisser l'ouverture IA.
+
+M. **Mention clients en générique anonymisé** : jamais d'entité nommée. Toute expérience opérationnelle vécue (6 ans claims MSH/Henner) est cadrée en généralité : "Quand on gère des sinistres santé internationale pendant plusieurs années…"
 
 ÉTAPE 5 — 3 VARIANTES DE HOOK PAR WINNER
 
@@ -146,12 +162,14 @@ Schéma chaque winner :
   "fusion_used": false ou ["W20-A2", "W20-A6"],
   "scoring": [ { angle_id, score_total, sous_scores, commentaire }, ... ],
                           ↑ contient l'entrée scoring de l'angle (ou des 2 angles si fusion) qui ALIMENTE ce winner uniquement
-  "rationale_strategique": "4-6 lignes expliquant pourquoi ce winner est dans le trio (complémentarité, pas juste score)",
+  "rationale_strategique": "4-6 lignes expliquant pourquoi ce winner est dans le trio (complémentarité archétype/ICP/longueur + rotation produit)",
   "post_final": "le post LinkedIn complet, prêt à publier",
   "hook_variantes": ["hook A", "hook B", "hook C"],
   "cta_recommande": "la phrase finale du post OU 'aucun CTA' si la fin est une assertion",
   "longueur_finale": <integer caractères du post_final>,
-  "checklist_qualite_passee": { "anti_cliche_ok": bool, "ancrage_actu_assurance_ok": bool, "ton_synvex_ok": bool, "longueur_alignee_tendance_ok": bool, "absence_survente_ok": bool, "vocabulaire_metier_ok": bool }
+  "checklist_qualite_passee": { "anti_cliche_ok": bool, "ancrage_actu_assurance_ok": bool, "ton_synvex_ok": bool, "longueur_alignee_tendance_ok": bool, "absence_survente_ok": bool, "vocabulaire_metier_ok": bool },
+  "produit_synvex_ancrage": "Orion|Vega|Chiron|Argus|Helios|Hermès|Nexus|Atlas|Cortex"
+                          ↑ HÉRITÉ de l'angle source. Pour une fusion, prendre le produit_synvex_ancrage de l'angle dominant (celui dont la mécanique pilote le post). Respecter accents (Hermès).
 }
 \`\`\`
 

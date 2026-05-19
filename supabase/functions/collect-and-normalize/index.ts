@@ -12,11 +12,11 @@
 // stopwords). Tolérance acceptable car les profils watchlist v0.3 ont
 // déjà été filtrés FR à l'amont.
 
-import { errorResponse, handleCorsPreflight, jsonResponse } from '../_shared/cors.ts';
 import { verifyAuth } from '../_shared/auth.ts';
-import { getSupabase } from '../_shared/supabase.ts';
-import { logger } from '../_shared/logger.ts';
+import { errorResponse, handleCorsPreflight, jsonResponse } from '../_shared/cors.ts';
 import { requireEnv } from '../_shared/env.ts';
+import { logger } from '../_shared/logger.ts';
+import { getSupabase } from '../_shared/supabase.ts';
 
 interface ProfileRow {
   profile_id: string;

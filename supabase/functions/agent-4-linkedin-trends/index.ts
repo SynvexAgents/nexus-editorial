@@ -5,20 +5,20 @@
 //
 // Body : { week_id: string, force?: boolean, min_posts?: number }
 
-import { errorResponse, handleCorsPreflight, jsonResponse } from '../_shared/cors.ts';
-import { verifyAuth } from '../_shared/auth.ts';
-import { getSupabase } from '../_shared/supabase.ts';
-import { logger } from '../_shared/logger.ts';
-import { currentIsoWeek } from '../_shared/week.ts';
-import { loadContextBrief, loadVoiceTone } from '../_shared/system_prompts.ts';
 import { callAnthropic, extractTextFromResponse } from '../_shared/anthropic.ts';
-import { computeAnthropicCost, HAIKU_4_5 } from '../_shared/pricing.ts';
+import { verifyAuth } from '../_shared/auth.ts';
+import { errorResponse, handleCorsPreflight, jsonResponse } from '../_shared/cors.ts';
 import { extractJsonFromPrefilledResponse } from '../_shared/json_extract.ts';
+import { logger } from '../_shared/logger.ts';
+import { HAIKU_4_5, computeAnthropicCost } from '../_shared/pricing.ts';
 import {
   type LinkedinTrends,
   type PostAnalysis,
   linkedinTrendsSchema,
 } from '../_shared/schemas.ts';
+import { getSupabase } from '../_shared/supabase.ts';
+import { loadContextBrief, loadVoiceTone } from '../_shared/system_prompts.ts';
+import { currentIsoWeek } from '../_shared/week.ts';
 
 interface PostAnalysisEnriched {
   analysis: PostAnalysis;

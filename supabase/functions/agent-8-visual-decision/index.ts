@@ -5,16 +5,16 @@
 //
 // Body : { week_id: string, force?: boolean }
 
-import { errorResponse, handleCorsPreflight, jsonResponse } from '../_shared/cors.ts';
-import { verifyAuth } from '../_shared/auth.ts';
-import { getSupabase } from '../_shared/supabase.ts';
-import { logger } from '../_shared/logger.ts';
-import { currentIsoWeek } from '../_shared/week.ts';
 import { callAnthropic, extractTextFromResponse } from '../_shared/anthropic.ts';
-import { computeAnthropicCost, HAIKU_4_5 } from '../_shared/pricing.ts';
+import { verifyAuth } from '../_shared/auth.ts';
+import { errorResponse, handleCorsPreflight, jsonResponse } from '../_shared/cors.ts';
 import { extractJsonFromPrefilledResponse } from '../_shared/json_extract.ts';
+import { logger } from '../_shared/logger.ts';
+import { HAIKU_4_5, computeAnthropicCost } from '../_shared/pricing.ts';
 import type { VisualDecision, WeeklyWinners } from '../_shared/schemas.ts';
 import { visualsArraySchema } from '../_shared/schemas.ts';
+import { getSupabase } from '../_shared/supabase.ts';
+import { currentIsoWeek } from '../_shared/week.ts';
 
 const SYSTEM_PROMPT_VISUAL = `Tu es Visual Decision pour Synvex. Tu reçois 3 posts LinkedIn FR finaux et tu décides pour chacun :
 

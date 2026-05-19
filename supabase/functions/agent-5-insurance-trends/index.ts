@@ -11,15 +11,15 @@
 // réel a pris 66s, W20 85s). Si dépassement systématique, à découper
 // en 2 functions (clusters 1-4 et 5-7).
 
-import { errorResponse, handleCorsPreflight, jsonResponse } from '../_shared/cors.ts';
 import { verifyAuth } from '../_shared/auth.ts';
-import { getSupabase } from '../_shared/supabase.ts';
-import { logger } from '../_shared/logger.ts';
-import { currentIsoWeek, isoWeekToDateRange, type WeekRange } from '../_shared/week.ts';
+import { errorResponse, handleCorsPreflight, jsonResponse } from '../_shared/cors.ts';
 import { requireEnv } from '../_shared/env.ts';
-import { computePerplexityCost } from '../_shared/pricing.ts';
 import { extractJsonArray } from '../_shared/json_extract.ts';
+import { logger } from '../_shared/logger.ts';
+import { computePerplexityCost } from '../_shared/pricing.ts';
 import { type InsuranceTrendItem, insuranceTrendItemSchema } from '../_shared/schemas.ts';
+import { getSupabase } from '../_shared/supabase.ts';
+import { type WeekRange, currentIsoWeek, isoWeekToDateRange } from '../_shared/week.ts';
 
 type ClusterId =
   | 'regulation_acpr'
@@ -513,8 +513,8 @@ Deno.serve(async (req: Request) => {
     };
     const perCluster: ClusterStats[] = [];
     const failedClusters: ClusterId[] = [];
-    let totalInput = 0,
-      totalOutput = 0;
+    let totalInput = 0;
+    let totalOutput = 0;
 
     for (const c of targets) {
       const r = await runClusterPipeline(c, range, apiKey);

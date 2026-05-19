@@ -44,7 +44,7 @@ enabled = true
 inspector_port = 8083
 
 [functions.agent-3-post-analysis]
-verify_jwt = false  # Auth gérée par notre bearer SUPABASE_NEXUS_API_TOKEN.
+verify_jwt = false  # Auth gérée par notre bearer NEXUS_API_TOKEN.
 
 [functions.agent-4-linkedin-trends]
 verify_jwt = false

@@ -5,11 +5,9 @@
 //
 // Body : { week_id: string, force?: boolean }
 
-import { errorResponse, handleCorsPreflight, jsonResponse } from '../_shared/cors.ts';
 import { verifyAuth } from '../_shared/auth.ts';
-import { getSupabase } from '../_shared/supabase.ts';
+import { errorResponse, handleCorsPreflight, jsonResponse } from '../_shared/cors.ts';
 import { logger } from '../_shared/logger.ts';
-import { currentIsoWeek } from '../_shared/week.ts';
 import type {
   Day,
   LinkedinTrends,
@@ -18,6 +16,8 @@ import type {
   WeeklyWinners,
 } from '../_shared/schemas.ts';
 import { timingRecommendationSchema } from '../_shared/schemas.ts';
+import { getSupabase } from '../_shared/supabase.ts';
+import { currentIsoWeek } from '../_shared/week.ts';
 
 const DEFAULT_DAY_PALETTE: Day[] = ['Mar', 'Jeu', 'Mer'];
 const DAY_NAME_TO_ENUM: Record<string, Day> = {

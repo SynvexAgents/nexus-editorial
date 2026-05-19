@@ -17,19 +17,23 @@
  *
  * Pattern aligné Agent 4 / Agent 5 : toute logique déterministe sort du LLM.
  */
-import type { WeeklyAngles } from '@nexus/shared';
+import type { ProduitSynvex, WeeklyAngles } from '@nexus/shared';
+import { PRODUITS_SYNVEX } from '@nexus/shared';
 
 /** Regex inclusive — un match ≥ 1 fait passer la validation. */
 const ANCRAGE_ASSURANCE_REGEX =
   /\b(S\/P|loss ratio|ratio combiné|ratio combine|IBNR|prime|primes|sinistre|sinistres|ACPR|RGPD|bordereau|bordereaux|MGA|courtage|mutuelle|mutuelles|claims|indemnisation|fronteur|fronting|assureur|assureurs|insurtech|réassureur|reassureur|réassurance|reassurance|conventions|rétrocession|retrocession|rétrocessions|retrocessions|audit trail|matrice de délégation|matrice de delegation|EIOPA|Solvency|solvabilité|solvabilite|CatNat|catnat|IARD|santé collective|sante collective|prévoyance|prevoyance)\b/i;
 
+// v2 mai 2026 : 9 produits Synvex (ajout Vega et Nexus). Cf. §9 context_brief.
 const SYNVEX_PRODUCT_NAMES = [
   'Orion',
+  'Vega',
   'Helios',
   'Chiron',
   'Hermès',
   'Hermes',
   'Argus',
+  'Nexus',
   'Atlas',
   'Cortex',
 ];
@@ -54,6 +58,11 @@ export interface AnglesValidationReport {
   empty_risks_filled: AngleValidationFlag[];
   longueur_cibles_distinct: number;
   icp_vises_distinct: number;
+  // v2 mai 2026 — diversité produit Synvex
+  produits_synvex_distinct: number;
+  produits_synvex_used: ProduitSynvex[];
+  produit_synvex_missing: AngleValidationFlag[];
+  produit_synvex_diversity_ok: boolean; // ≥ 5 produits distincts sur 8 angles
   /** True si flags critiques (mention Synvex / produit) détectés. */
   has_critical_flags: boolean;
 }
@@ -149,6 +158,33 @@ export function postProcessAngles(angles: WeeklyAngles, weekId: string): PostPro
   const distinctIcp = new Set(finalAngles.map((a) => a.icp_vise)).size;
   const distinctLongueur = new Set(finalAngles.map((a) => a.longueur_cible)).size;
 
+  // 6. v2 — Diversité produit Synvex (champ optionnel pour backward compat).
+  const validProduits = new Set<ProduitSynvex>(PRODUITS_SYNVEX);
+  const produitFlags: AngleValidationFlag[] = [];
+  const produitsUsed: ProduitSynvex[] = [];
+  for (const a of finalAngles) {
+    const p = a.produit_synvex_ancrage;
+    if (!p) {
+      produitFlags.push({
+        angle_id: a.angle_id,
+        archetype: a.archetype,
+        flag: 'produit_synvex_ancrage_missing',
+      });
+    } else if (!validProduits.has(p as ProduitSynvex)) {
+      produitFlags.push({
+        angle_id: a.angle_id,
+        archetype: a.archetype,
+        flag: 'produit_synvex_ancrage_invalid',
+        detail: String(p),
+      });
+    } else {
+      produitsUsed.push(p as ProduitSynvex);
+    }
+  }
+  const distinctProduits = new Set(produitsUsed).size;
+  // Cible : ≥ 5 produits distincts sur 8 angles. Si < 5, flag (pas critique mais warning).
+  const produitDiversityOk = distinctProduits >= 5;
+
   const report: AnglesValidationReport = {
     total_angles: finalAngles.length,
     ancrage_assurance_ok: finalAngles.length - ancrageFlags.length,
@@ -157,6 +193,10 @@ export function postProcessAngles(angles: WeeklyAngles, weekId: string): PostPro
     empty_risks_filled: emptyRisksFlags,
     longueur_cibles_distinct: distinctLongueur,
     icp_vises_distinct: distinctIcp,
+    produits_synvex_distinct: distinctProduits,
+    produits_synvex_used: produitsUsed,
+    produit_synvex_missing: produitFlags,
+    produit_synvex_diversity_ok: produitDiversityOk,
     has_critical_flags: synvexFlags.length > 0,
   };
 

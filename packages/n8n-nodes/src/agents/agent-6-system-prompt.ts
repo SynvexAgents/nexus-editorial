@@ -56,7 +56,7 @@ ATTENTION CRITIQUE :
 
 === CHAMPS PAR ANGLE ===
 
-Chaque objet de \`angles\` contient EXACTEMENT ces 12 champs :
+Chaque objet de \`angles\` contient EXACTEMENT ces 13 champs (12 historiques + 1 v2) :
 
 1. \`angle_id\` : string format \`W{numéro}-A{1..8}\` (ex: \`W20-A1\`). Tu peux laisser des placeholders \`W20-A1\` à \`W20-A8\` — le post-processing les régénère. Ne mets pas de zéros à gauche.
 
@@ -83,6 +83,8 @@ Chaque objet de \`angles\` contient EXACTEMENT ces 12 champs :
 12. \`icp_vise\` : enum strict parmi \`courtier\`, \`MGA\`, \`mutuelle\`, \`insurtech\`, \`dirigeant_general\`. UN seul ICP par angle. VARIE les ICP sur les 8 angles — pas 8 fois "courtier". Au moins 4 ICP différents sur les 8 angles.
 
 13. \`risques\` : array de 1-3 strings. Chaque entrée = un risque identifié (over-promesse, ton qui dérape, anglicisme glissé, chiffre orphelin, etc.). Spécifique à cet angle, pas générique. Si tu n'identifies aucun risque, ne mets PAS un array vide — mets au moins ["aucun risque majeur identifié"].
+
+14. \`produit_synvex_ancrage\` : enum strict parmi les 9 produits du catalogue Synvex 2026 — \`Orion\`, \`Vega\`, \`Chiron\`, \`Argus\`, \`Helios\`, \`Hermès\`, \`Nexus\`, \`Atlas\`, \`Cortex\`. C'est le produit que cet angle pré-positionne implicitement (Agent 7 héritera de ce produit pour le bridge subtil/moyen du post final). Les fiches détaillées des 9 produits sont en §9 du CONTEXTE SYNVEX ci-dessus. CRITIQUE : tu choisis le produit dont la fiche match le mieux l'angle généré (par ICP visé, par mécanisme évoqué, par problème adressé). Cite-le par son nom exact tel qu'écrit dans l'enum (respecte les accents : "Hermès" avec accent grave).
 
 === RÈGLES PAR ARCHÉTYPE ===
 
@@ -122,6 +124,14 @@ H. **Diversité forcée sur 8 angles** :
    - 8 archétypes distincts (vérification stricte côté Zod + post-processor).
    - Au moins 4 ICP différents sur les 8 angles.
    - Au moins 2 longueurs_cibles différentes sur les 8 angles.
+   - AU MOINS 5 produits Synvex DIFFÉRENTS sur les 8 angles (idéal : 8 produits différents si la matière des inputs le permet). Cette règle débloque la rotation équitable inter-semaines gérée par Agent 7 et le pilotage de la voix Synvex en pré-acquisition.
+
+I. **Stratégie éditoriale v2 — règles bridge/IA/CTA à anticiper** :
+   - Bridge produit : tu n'écris PAS le post final (c'est Agent 7), mais tu produis un brief qui PERMET à Agent 7 de placer un bridge produit subtil (80%) ou moyen (20%) en fin de post. Ton ancrage_assurance + ta structure_proposee doivent rendre ce bridge évident sans le nommer.
+   - Mention IA opérationnelle : ton angle doit pouvoir accueillir une mention IA en mode A subtil ("les acteurs avancés y répondent par X"), B direct ("ce problème est typiquement ce qu'un agent IA correctement calibré résout"), ou C démonstratif anonymisé ("voici comment on a vu ce problème résolu chez un opérateur récent"). Évite de fermer le sujet sur "ça reste manuel partout" — laisse l'ouverture IA dans la promesse_lecteur.
+   - CTA implicite : pas de "DM moi" ni "réservez démo". Ta structure_proposee se termine idéalement par une "question terrain ouverte" qui invite commentaire.
+
+J. **Mention clients en générique anonymisé** : jamais d'entité nommée (jamais Phenomen, Henner, MSH ou autre). Si l'angle s'appuie sur une expérience opérationnelle, formule en généralité : "un de mes clients", "un opérateur récent", "sur un déploiement courtage", "dans une mutuelle régionale", "chez un broker multi-marques".
 
 === FORMAT DE SORTIE ===
 
@@ -131,7 +141,7 @@ Schéma de sortie :
 \`\`\`
 {
   "angles": [
-    { "angle_id": "...", "archetype": "...", "titre_interne": "...", "hook_brut": "...", "these_centrale": "...", "promesse_lecteur": "...", "structure_proposee": "...", "longueur_cible": "...", "tonalite": "...", "ancrage_assurance": "...", "ancrage_linkedin": "...", "icp_vise": "...", "risques": [...] },
+    { "angle_id": "...", "archetype": "...", "titre_interne": "...", "hook_brut": "...", "these_centrale": "...", "promesse_lecteur": "...", "structure_proposee": "...", "longueur_cible": "...", "tonalite": "...", "ancrage_assurance": "...", "ancrage_linkedin": "...", "icp_vise": "...", "risques": [...], "produit_synvex_ancrage": "Orion|Vega|Chiron|Argus|Helios|Hermès|Nexus|Atlas|Cortex" },
     ... 7 autres ...
   ]
 }

@@ -10,7 +10,8 @@
  * booléens de l'auto-check, on corrige longueur_finale, et on flag les
  * incohérences pour revue humaine.
  */
-import type { WeeklyAngles, WeeklyWinners } from '@nexus/shared';
+import type { ProduitSynvex, WeeklyAngles, WeeklyWinners } from '@nexus/shared';
+import { PRODUITS_SYNVEX } from '@nexus/shared';
 
 /** Lexique banni (cf. synvex-voice-tone.md). Insensible casse. */
 const BANNED_LEXIQUE = [
@@ -57,13 +58,16 @@ const ECOSYSTEME_BANNED_REGEX = /\bécosystème\b(?!\s+assurance\b)/i;
 // nominale). On garde simple : on cible "\bboost\b" et "\bboostez?\b".
 const BOOST_BANNED_REGEX = /\bboost(?:e|es|ez|er|ée|ées|és)?\b/i;
 
+// v2 mai 2026 : catalogue 9 produits Synvex (ajout de Vega et Nexus).
 const SYNVEX_PRODUCT_NAMES = [
   'Orion',
+  'Vega',
   'Helios',
   'Chiron',
   'Hermès',
   'Hermes',
   'Argus',
+  'Nexus',
   'Atlas',
   'Cortex',
 ];
@@ -100,6 +104,11 @@ export interface WinnersValidationReport {
   icp_distinct: number;
   /** Nombre de longueurs cibles distinctes (basé sur l'angle d'origine). */
   longueurs_distinct: number;
+  // v2 mai 2026 — diversité produit Synvex
+  produits_synvex_distinct: number;
+  produits_synvex_used: ProduitSynvex[];
+  /** True si ≥ 2 produits distincts sur 3 winners (cible idéale : 3). */
+  produit_synvex_diversity_ok: boolean;
   /** Liste de tous les overrides appliqués (audit trail). */
   overrides: WinnerOverride[];
   /** Flags critiques (mention Synvex multiple, complémentarité KO). */
@@ -226,6 +235,35 @@ export function postProcessWinners(
       mutable = { ...mutable, longueur_finale: realLength };
     }
 
+    // --- 5. v2 produit_synvex_ancrage : hérité de l'angle source si absent ---
+    if (!mutable.produit_synvex_ancrage) {
+      const angleIdForLookup =
+        mutable.fusion_used === false
+          ? mutable.winner_id
+          : (mutable.fusion_used as [string, string])[0];
+      const a = angleById.get(angleIdForLookup);
+      if (a?.produit_synvex_ancrage) {
+        overrides.push({
+          post_position: mutable.post_position,
+          field: 'produit_synvex_ancrage',
+          from: undefined,
+          to: a.produit_synvex_ancrage,
+          reason: `hérité de l'angle source ${angleIdForLookup}`,
+        });
+        mutable = { ...mutable, produit_synvex_ancrage: a.produit_synvex_ancrage };
+      }
+    }
+    // Vérifie validité du produit si présent (defense in depth — Zod l'a déjà
+    // validé sauf si Agent 7 sort un enum custom).
+    if (
+      mutable.produit_synvex_ancrage &&
+      !PRODUITS_SYNVEX.includes(mutable.produit_synvex_ancrage)
+    ) {
+      criticalFlags.push(
+        `position ${mutable.post_position}: produit_synvex_ancrage invalide (${String(mutable.produit_synvex_ancrage)}).`,
+      );
+    }
+
     return mutable;
   }) as WeeklyWinners;
 
@@ -269,12 +307,31 @@ export function postProcessWinners(
     }
   }
 
+  // v2 — Diversité produit Synvex sur les 3 winners.
+  const produitsUsed: ProduitSynvex[] = [];
+  for (const w of processed) {
+    if (w.produit_synvex_ancrage && PRODUITS_SYNVEX.includes(w.produit_synvex_ancrage)) {
+      produitsUsed.push(w.produit_synvex_ancrage);
+    }
+  }
+  const produitsDistinct = new Set(produitsUsed).size;
+  // Cible idéale : 3 produits distincts. Acceptable : ≥ 2.
+  const produitDiversityOk = produitsDistinct >= 2;
+  if (!produitDiversityOk && produitsUsed.length > 0) {
+    criticalFlags.push(
+      `diversité produit insuffisante : ${produitsDistinct} produit(s) distinct(s) sur 3 winners (min 2).`,
+    );
+  }
+
   return {
     winners: processed,
     validation_report: {
       archetypes_distinct: archetypesDistinct,
       icp_distinct: icpsDistinct,
       longueurs_distinct: longueursDistinct,
+      produits_synvex_distinct: produitsDistinct,
+      produits_synvex_used: produitsUsed,
+      produit_synvex_diversity_ok: produitDiversityOk,
       overrides,
       critical_flags: criticalFlags,
       complementarite_ok: archetypesDistinct >= 2 && icpsDistinct >= 2,

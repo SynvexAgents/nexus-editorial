@@ -7,15 +7,12 @@
 //
 // Body : { week_id: string, force?: boolean }
 
-import { errorResponse, handleCorsPreflight, jsonResponse } from '../_shared/cors.ts';
-import { verifyAuth } from '../_shared/auth.ts';
-import { getSupabase } from '../_shared/supabase.ts';
-import { logger } from '../_shared/logger.ts';
-import { currentIsoWeek } from '../_shared/week.ts';
-import { loadContextBrief, loadVoiceTone } from '../_shared/system_prompts.ts';
 import { callAnthropic, extractTextFromResponse } from '../_shared/anthropic.ts';
-import { computeAnthropicCost, OPUS_4_7 } from '../_shared/pricing.ts';
+import { verifyAuth } from '../_shared/auth.ts';
+import { errorResponse, handleCorsPreflight, jsonResponse } from '../_shared/cors.ts';
 import { extractJsonObject } from '../_shared/json_extract.ts';
+import { logger } from '../_shared/logger.ts';
+import { OPUS_4_7, computeAnthropicCost } from '../_shared/pricing.ts';
 import {
   type InsuranceTrends,
   type LinkedinTrends,
@@ -24,6 +21,9 @@ import {
   type WeeklyWinners,
   weeklyWinnersSchema,
 } from '../_shared/schemas.ts';
+import { getSupabase } from '../_shared/supabase.ts';
+import { loadContextBrief, loadVoiceTone } from '../_shared/system_prompts.ts';
+import { currentIsoWeek } from '../_shared/week.ts';
 
 const BANNED_LEXIQUE = [
   'synergie',
@@ -60,7 +60,8 @@ const BANNED_LEXIQUE_REGEX = new RegExp(
 );
 const ECOSYSTEME_REGEX = /\bécosystème\b(?!\s+assurance\b)/i;
 const BOOST_REGEX = /\bboost(?:e|es|ez|er|ée|ées|és)?\b/i;
-const SYNVEX_PRODUCT_REGEX = /\b(Orion|Helios|Chiron|Hermès|Hermes|Argus|Atlas|Cortex)\b/i;
+const SYNVEX_PRODUCT_REGEX =
+  /\b(Orion|Vega|Helios|Chiron|Hermès|Hermes|Argus|Nexus|Atlas|Cortex)\b/i;
 const SYNVEX_NAME_REGEX = /\bSynvex\b/gi;
 const METIER_REGEX =
   /\b(S\/P|IBNR|ACPR|RGPD|bordereau|bordereaux|MGA|mutuelle|mutuelles|courtage|claims|sinistre|sinistres|prime|primes|matrice|fronteur|fronting|réassureur|reassureur|réassurance|reassurance|assureur|assureurs|insurtech|loss ratio|ratio combiné|ratio combine|indemnisation|EIOPA|Solvency|solvabilité|CatNat|catnat|IARD|rétrocession|retrocession|conventions sinistres|audit trail|matrice de délégation)\b/gi;
@@ -109,22 +110,27 @@ score_total = eng×0.25 + cred×0.25 + autorite×0.20 + transf×0.15 + risque×0
 
 Fusion intéressante si 2 angles : partage sujet/ICP, combinaison > somme, post < 1500c.
 
-ÉTAPE 3 — SÉLECTION 3 WINNERS (complémentarité)
+ÉTAPE 3 — SÉLECTION 3 WINNERS (complémentarité + rotation produits v2)
 
-≥ 2 archétypes distincts. ≥ 2 ICP distincts. ≥ 2 longueurs distinctes. Rationale stratégique 4-6 lignes.
+≥ 2 archétypes distincts. ≥ 2 ICP distincts. ≥ 2 longueurs distinctes. IDÉAL ≥ 3 produits Synvex différents (parmi Orion/Vega/Chiron/Argus/Helios/Hermès/Nexus/Atlas/Cortex — champ produit_synvex_ancrage de chaque angle source). Rationale stratégique 4-6 lignes incluant rotation produit.
+
+ROTATION ÉQUITABLE : si le user prompt fournit product_rotation_history (count produits adressés sur 4 dernières semaines), priorise les produits sous-représentés. Un produit déjà adressé 2x récemment doit être dé-priorisé.
 
 ÉTAPE 4 — RÉDACTION POSTS FINAUX
 
 A. Vouvoiement. Voix Synvex (sec, lucide, phrases courtes).
-B. Aucune mention Synvex / Orion / Helios / Chiron / Hermès / Argus / Atlas / Cortex.
+B. Aucune mention Synvex / Orion / Vega / Chiron / Argus / Helios / Hermès / Nexus / Atlas / Cortex dans le contenu (post_final, hook_variantes). Le nom produit vit en métadonnée produit_synvex_ancrage UNIQUEMENT.
 C. Aucun lexique banni (synergie, disruption, révolution, transformation digitale, etc.).
 D. Aucune phrase bannie (l'IA va révolutionner, à l'ère de l'IA, 100% conforme, etc.).
 E. Aucun hook banni (Et si je vous disais, Hier soir, etc.).
 F. Pas de chiffre orphelin.
 G. Longueur respectée (court < 500c, moyen 500-1200c, long > 1200c mais < 2200c).
 H. Hook accrocheur. Constat/chiffre/contre-intuition.
-I. CTA = question ouverte ou rien.
+I. CTA = question terrain ouverte ("Comment vous gérez ça ?") ou rien. Jamais "DM moi" ni "réservez démo".
 J. Premier paragraphe : constat ou observation.
+K. **BRIDGE PRODUIT EN FIN DE POST (v2)** : selon produit_synvex_ancrage du winner, place un bridge SUBTIL (80% cas — observation qui fait écho) ou MOYEN (20% — catégorie de solution sans nommer Synvex). JAMAIS explicite (interdit).
+L. **MENTION IA OPÉRATIONNELLE (v2)** : chaque post doit mentionner l'IA en mode A subtil ("acteurs avancés y répondent par X type d'automatisation"), B direct ("agent IA correctement calibré résout en quelques minutes"), ou C démonstratif anonymisé ("un opérateur récent : agent qui ingère X, sort Y"). Jamais "ça reste manuel partout".
+M. **MENTION CLIENTS EN GÉNÉRIQUE ANONYMISÉ** : jamais Phenomen/Henner/MSH. Toujours "un de mes clients", "un opérateur récent", "sur un déploiement courtage".
 
 ÉTAPE 5 — 3 HOOK_VARIANTES par winner (tuple 3 strings).
 
@@ -142,7 +148,7 @@ J. Premier paragraphe : constat ou observation.
 
 JSON strict { "winners": [3 entrées], "all_scoring": [8 entrées]?, "fusions_proposees": [...]? }.
 Chaque winner :
-{ post_position (1|2|3), winner_id, fusion_used (false ou [id1, id2]), scoring (array), rationale_strategique, post_final, hook_variantes (3 strings), cta_recommande, longueur_finale (int>0), checklist_qualite_passee (6 booleans) }.
+{ post_position (1|2|3), winner_id, fusion_used (false ou [id1, id2]), scoring (array), rationale_strategique, post_final, hook_variantes (3 strings), cta_recommande, longueur_finale (int>0), checklist_qualite_passee (6 booleans), produit_synvex_ancrage (enum 9 produits — hérité de l'angle source) }.
 Ordre post_position 1, 2, 3. Aucun texte hors JSON.`;
 }
 

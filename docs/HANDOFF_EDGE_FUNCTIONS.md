@@ -16,7 +16,7 @@
 | `agent-9-timing-recommendation` | TS déterministe | `POST /functions/v1/agent-9-timing-recommendation` | `{ week_id?: string, force?: boolean }` |
 | `notify-weekly-report` | Resend HTTP | `POST /functions/v1/notify-weekly-report` | `{ week_id?: string }` |
 
-Tous renvoient JSON. Tous attendent un `Authorization: Bearer <SUPABASE_NEXUS_API_TOKEN>`.
+Tous renvoient JSON. Tous attendent un `Authorization: Bearer <NEXUS_API_TOKEN>`.
 
 ## Pré-requis
 
@@ -57,7 +57,7 @@ Liste exhaustive (toutes les vars consommées par les 11 functions) :
 
 ```bash
 # Auth interne entre n8n et les functions
-supabase secrets set SUPABASE_NEXUS_API_TOKEN=<le-token-genere-etape-2>
+supabase secrets set NEXUS_API_TOKEN=<le-token-genere-etape-2>
 
 # Supabase (le service_role_key est déjà accessible aux functions, mais
 # on le re-set explicitement car certains contexts l'ignorent autrement).

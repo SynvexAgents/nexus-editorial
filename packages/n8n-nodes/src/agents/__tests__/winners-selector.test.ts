@@ -561,3 +561,81 @@ describe('postProcessWinners — no overrides on clean valid post', () => {
     expect(result.validation_report.complementarite_ok).toBe(true);
   });
 });
+
+// ---------------------------------------------------------------------------
+// v2 mai 2026 — Tests produit Synvex (diversité ≥ 2 sur 3 winners + héritage)
+// ---------------------------------------------------------------------------
+
+describe('postProcessWinners — v2 produit Synvex diversité', () => {
+  it('reports 3 distinct products when each winner has a different product', () => {
+    const angles = makeAngles();
+    const winners: WeeklyWinners = [
+      makeWinner(1, { produit_synvex_ancrage: 'Hermès' }),
+      makeWinner(2, { winner_id: 'W20-A3', produit_synvex_ancrage: 'Argus' }),
+      makeWinner(3, { winner_id: 'W20-A5', produit_synvex_ancrage: 'Cortex' }),
+    ] as WeeklyWinners;
+    const result = postProcessWinners(winners, angles);
+    expect(result.validation_report.produits_synvex_distinct).toBe(3);
+    expect(result.validation_report.produit_synvex_diversity_ok).toBe(true);
+    expect(result.validation_report.produits_synvex_used.sort()).toEqual(
+      ['Argus', 'Cortex', 'Hermès'].sort(),
+    );
+  });
+
+  it('flags critical when 3 winners share the same product', () => {
+    const angles = makeAngles();
+    const winners: WeeklyWinners = [
+      makeWinner(1, { produit_synvex_ancrage: 'Argus' }),
+      makeWinner(2, { winner_id: 'W20-A3', produit_synvex_ancrage: 'Argus' }),
+      makeWinner(3, { winner_id: 'W20-A5', produit_synvex_ancrage: 'Argus' }),
+    ] as WeeklyWinners;
+    const result = postProcessWinners(winners, angles);
+    expect(result.validation_report.produits_synvex_distinct).toBe(1);
+    expect(result.validation_report.produit_synvex_diversity_ok).toBe(false);
+    expect(
+      result.validation_report.critical_flags.some((f) => f.includes('diversité produit')),
+    ).toBe(true);
+  });
+
+  it('inherits produit_synvex_ancrage from source angle when winner has none', () => {
+    const angles = makeAngles();
+    // L'angle W20-A1 a un produit dans le fixture (cf. makeAngles), on l'override
+    // pour s'assurer que le winner sans champ hérite bien.
+    const anglesWithProduct = angles.map((a, i) =>
+      i === 0 ? { ...a, produit_synvex_ancrage: 'Helios' as const } : a,
+    ) as WeeklyAngles;
+    const winners: WeeklyWinners = [
+      makeWinner(1), // SANS produit_synvex_ancrage → doit hériter de W20-A1
+      makeWinner(2, { winner_id: 'W20-A3', produit_synvex_ancrage: 'Argus' }),
+      makeWinner(3, { winner_id: 'W20-A5', produit_synvex_ancrage: 'Cortex' }),
+    ] as WeeklyWinners;
+    const result = postProcessWinners(winners, anglesWithProduct);
+    expect(result.winners[0]!.produit_synvex_ancrage).toBe('Helios');
+    const ov = result.validation_report.overrides.find(
+      (o) => o.post_position === 1 && o.field === 'produit_synvex_ancrage',
+    );
+    expect(ov).toBeDefined();
+    expect(ov?.to).toBe('Helios');
+  });
+
+  it('handles fusion winners with produit inherited from first angle', () => {
+    const angles = makeAngles();
+    const anglesWithProducts = angles.map((a, i) => {
+      if (i === 0) return { ...a, produit_synvex_ancrage: 'Helios' as const };
+      if (i === 5) return { ...a, produit_synvex_ancrage: 'Vega' as const };
+      return a;
+    }) as WeeklyAngles;
+    const fusion: WeeklyWinners = [
+      makeWinner(1, {
+        winner_id: 'F1',
+        fusion_used: ['W20-A1', 'W20-A6'],
+        // pas de produit_synvex_ancrage → doit hériter de W20-A1 (1er angle)
+      }),
+      makeWinner(2, { winner_id: 'W20-A3', produit_synvex_ancrage: 'Argus' }),
+      makeWinner(3, { winner_id: 'W20-A8', produit_synvex_ancrage: 'Nexus' }),
+    ] as WeeklyWinners;
+    const result = postProcessWinners(fusion, anglesWithProducts);
+    expect(result.winners[0]!.produit_synvex_ancrage).toBe('Helios');
+    expect(result.validation_report.produits_synvex_distinct).toBe(3);
+  });
+});

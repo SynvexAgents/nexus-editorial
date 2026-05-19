@@ -4,12 +4,10 @@
 //
 // Body : { week_id?: string }
 
-import { errorResponse, handleCorsPreflight, jsonResponse } from '../_shared/cors.ts';
 import { verifyAuth } from '../_shared/auth.ts';
-import { getSupabase } from '../_shared/supabase.ts';
-import { logger } from '../_shared/logger.ts';
-import { currentIsoWeek } from '../_shared/week.ts';
+import { errorResponse, handleCorsPreflight, jsonResponse } from '../_shared/cors.ts';
 import { getEnv, requireEnv } from '../_shared/env.ts';
+import { logger } from '../_shared/logger.ts';
 import type {
   InsuranceTrends,
   LinkedinTrends,
@@ -18,6 +16,8 @@ import type {
   WeeklyWinner,
   WeeklyWinners,
 } from '../_shared/schemas.ts';
+import { getSupabase } from '../_shared/supabase.ts';
+import { currentIsoWeek } from '../_shared/week.ts';
 
 interface ReportData {
   week_id: string;
