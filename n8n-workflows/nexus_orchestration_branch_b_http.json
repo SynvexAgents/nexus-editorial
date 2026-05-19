@@ -54,11 +54,14 @@
         "method": "HEAD",
         "url": "https://jugcyqtweavrltmxdogg.supabase.co/rest/v1/clean_posts?select=post_id&is_relevant=eq.true&limit=1",
         "authentication": "predefinedCredentialType",
-        "nodeCredentialType": "httpCustomAuth",
+        "nodeCredentialType": "httpHeaderAuth",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
-            { "name": "Prefer", "value": "count=exact" }
+            {
+              "name": "Prefer",
+              "value": "count=exact"
+            }
           ]
         },
         "options": {
@@ -77,12 +80,12 @@
       "typeVersion": 4.2,
       "position": [620, 360],
       "credentials": {
-        "httpCustomAuth": {
-          "id": "i30YgXS1wC5UwKtK",
-          "name": "Supabase Service Role (Nexus Editorial)"
+        "httpHeaderAuth": {
+          "id": "KbDqihI57f1BHe5T",
+          "name": "Supabase apikey LinkedIn"
         }
       },
-      "notes": "HEAD vers clean_posts avec Prefer: count=exact. Auth via credential httpCustomAuth (apikey + Authorization). fullResponse=true pour exposer content-range au node suivant."
+      "notes": "HEAD vers clean_posts avec Prefer: count=exact. Auth via credential httpHeaderAuth (apikey seul, suffit pour Supabase REST avec service_role). fullResponse=true pour exposer content-range au node suivant."
     },
     {
       "parameters": {
@@ -409,7 +412,7 @@
         "method": "GET",
         "url": "=https://jugcyqtweavrltmxdogg.supabase.co/rest/v1/weekly_reports?week_id=eq.{{$node['Code: compute_week_id'].json.week_id}}&select=linkedin_trends_json,insurance_trends_json,angles_json,winners_json,visuals_json,timing_json",
         "authentication": "predefinedCredentialType",
-        "nodeCredentialType": "httpCustomAuth",
+        "nodeCredentialType": "httpHeaderAuth",
         "options": {
           "timeout": 15000,
           "response": {
@@ -425,12 +428,12 @@
       "typeVersion": 4.2,
       "position": [2600, 240],
       "credentials": {
-        "httpCustomAuth": {
-          "id": "i30YgXS1wC5UwKtK",
-          "name": "Supabase Service Role (Nexus Editorial)"
+        "httpHeaderAuth": {
+          "id": "KbDqihI57f1BHe5T",
+          "name": "Supabase apikey LinkedIn"
         }
       },
-      "notes": "GET weekly_reports filtre sur week_id, select des 6 colonnes JSON. Auth via credential httpCustomAuth (apikey + Authorization Bearer). Reponse en JSON parsee par le node suivant."
+      "notes": "GET weekly_reports filtre sur week_id, select des 6 colonnes JSON. Auth via credential httpHeaderAuth (apikey seul, suffit pour Supabase REST avec service_role). Reponse en JSON parsee par le node suivant."
     },
     {
       "parameters": {
@@ -520,71 +523,219 @@
   ],
   "connections": {
     "Manual Trigger": {
-      "main": [[{ "node": "Code: compute_week_id", "type": "main", "index": 0 }]]
+      "main": [
+        [
+          {
+            "node": "Code: compute_week_id",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     },
     "Schedule Trigger Saturday 22h (disabled)": {
-      "main": [[{ "node": "Code: compute_week_id", "type": "main", "index": 0 }]]
+      "main": [
+        [
+          {
+            "node": "Code: compute_week_id",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     },
     "Code: compute_week_id": {
-      "main": [[{ "node": "HTTP: Volume Gate", "type": "main", "index": 0 }]]
+      "main": [
+        [
+          {
+            "node": "HTTP: Volume Gate",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     },
     "HTTP: Volume Gate": {
-      "main": [[{ "node": "Code: parse_volume", "type": "main", "index": 0 }]]
+      "main": [
+        [
+          {
+            "node": "Code: parse_volume",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     },
     "Code: parse_volume": {
-      "main": [[{ "node": "IF volume_sufficient", "type": "main", "index": 0 }]]
+      "main": [
+        [
+          {
+            "node": "IF volume_sufficient",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     },
     "IF volume_sufficient": {
       "main": [
-        [{ "node": "HTTP: Agent 3 (PostAnalysis)", "type": "main", "index": 0 }],
-        [{ "node": "Email: Volume Insufficient", "type": "main", "index": 0 }]
+        [
+          {
+            "node": "HTTP: Agent 3 (PostAnalysis)",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Email: Volume Insufficient",
+            "type": "main",
+            "index": 0
+          }
+        ]
       ]
     },
     "HTTP: Agent 3 (PostAnalysis)": {
       "main": [
         [
-          { "node": "HTTP: Agent 4 (LinkedinTrends)", "type": "main", "index": 0 },
-          { "node": "HTTP: Agent 5 (InsuranceTrends)", "type": "main", "index": 0 }
+          {
+            "node": "HTTP: Agent 4 (LinkedinTrends)",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "HTTP: Agent 5 (InsuranceTrends)",
+            "type": "main",
+            "index": 0
+          }
         ]
       ]
     },
     "HTTP: Agent 4 (LinkedinTrends)": {
-      "main": [[{ "node": "Merge: Wait Agents 4+5", "type": "main", "index": 0 }]]
+      "main": [
+        [
+          {
+            "node": "Merge: Wait Agents 4+5",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     },
     "HTTP: Agent 5 (InsuranceTrends)": {
-      "main": [[{ "node": "Merge: Wait Agents 4+5", "type": "main", "index": 1 }]]
+      "main": [
+        [
+          {
+            "node": "Merge: Wait Agents 4+5",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
     },
     "Merge: Wait Agents 4+5": {
-      "main": [[{ "node": "HTTP: Agent 6 (Angles Generator)", "type": "main", "index": 0 }]]
+      "main": [
+        [
+          {
+            "node": "HTTP: Agent 6 (Angles Generator)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     },
     "HTTP: Agent 6 (Angles Generator)": {
-      "main": [[{ "node": "HTTP: Agent 7 (Winners Selector)", "type": "main", "index": 0 }]]
+      "main": [
+        [
+          {
+            "node": "HTTP: Agent 7 (Winners Selector)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     },
     "HTTP: Agent 7 (Winners Selector)": {
       "main": [
         [
-          { "node": "HTTP: Agent 8 (Visual Decision)", "type": "main", "index": 0 },
-          { "node": "HTTP: Agent 9 (Timing)", "type": "main", "index": 0 }
+          {
+            "node": "HTTP: Agent 8 (Visual Decision)",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "HTTP: Agent 9 (Timing)",
+            "type": "main",
+            "index": 0
+          }
         ]
       ]
     },
     "HTTP: Agent 8 (Visual Decision)": {
-      "main": [[{ "node": "Merge: Wait Agents 8+9", "type": "main", "index": 0 }]]
+      "main": [
+        [
+          {
+            "node": "Merge: Wait Agents 8+9",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     },
     "HTTP: Agent 9 (Timing)": {
-      "main": [[{ "node": "Merge: Wait Agents 8+9", "type": "main", "index": 1 }]]
+      "main": [
+        [
+          {
+            "node": "Merge: Wait Agents 8+9",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
     },
     "Merge: Wait Agents 8+9": {
-      "main": [[{ "node": "HTTP: Validate Weekly Complete", "type": "main", "index": 0 }]]
+      "main": [
+        [
+          {
+            "node": "HTTP: Validate Weekly Complete",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     },
     "HTTP: Validate Weekly Complete": {
-      "main": [[{ "node": "Code: parse_validate", "type": "main", "index": 0 }]]
+      "main": [
+        [
+          {
+            "node": "Code: parse_validate",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     },
     "Code: parse_validate": {
-      "main": [[{ "node": "HTTP: Notify Weekly Report (Resend)", "type": "main", "index": 0 }]]
+      "main": [
+        [
+          {
+            "node": "HTTP: Notify Weekly Report (Resend)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     },
     "Error Trigger": {
-      "main": [[{ "node": "Email: Notify Error", "type": "main", "index": 0 }]]
+      "main": [
+        [
+          {
+            "node": "Email: Notify Error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     }
   },
   "meta": {
