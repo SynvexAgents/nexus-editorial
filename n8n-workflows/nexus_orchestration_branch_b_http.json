@@ -1,0 +1,490 @@
+{
+  "name": "Nexus Editorial — Branch B HTTP (Edge Functions)",
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "saveDataErrorExecution": "all",
+    "saveDataSuccessExecution": "all",
+    "saveExecutionProgress": true,
+    "timezone": "Europe/Paris",
+    "errorWorkflow": ""
+  },
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "trg_manual",
+      "name": "Manual Trigger",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [240, 240]
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 22 * * 6"
+            }
+          ]
+        },
+        "notes": "Samedi 22:00 Europe/Paris. NE PAS ACTIVER tant que un run manuel complet n'a pas été validé bout-en-bout via les Edge Functions Supabase déployées."
+      },
+      "id": "trg_schedule",
+      "name": "Schedule Trigger Saturday 22h (disabled)",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.1,
+      "position": [240, 480],
+      "disabled": true
+    },
+    {
+      "parameters": {
+        "language": "javaScript",
+        "jsCode": "// Calcule la week_id ISO 8601 de la semaine courante (Europe/Paris).\n// Source de vérité pour toute la branche.\nconst now = new Date();\nconst utc = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));\nconst dayNum = utc.getUTCDay() || 7;\nutc.setUTCDate(utc.getUTCDate() + 4 - dayNum);\nconst yearStart = new Date(Date.UTC(utc.getUTCFullYear(), 0, 1));\nconst week = Math.ceil(((utc.getTime() - yearStart.getTime()) / 86400000 + 1) / 7);\nconst weekId = `${utc.getUTCFullYear()}-W${String(week).padStart(2, '0')}`;\nconst monday = new Date(utc);\nmonday.setUTCDate(utc.getUTCDate() - 3);\nmonday.setUTCHours(0, 0, 0, 0);\nreturn [{ json: { week_id: weekId, week_start_iso: monday.toISOString() } }];\n",
+        "notes": "Source de vérité week_id. Propagé via $node['Code: compute_week_id'].json.week_id."
+      },
+      "id": "code_week_id",
+      "name": "Code: compute_week_id",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [460, 360]
+    },
+    {
+      "parameters": {
+        "language": "javaScript",
+        "jsCode": "// Volume gate via Supabase REST direct (Supabase service_role key dispo via $env).\nconst weekId = $node['Code: compute_week_id'].json.week_id;\nconst url = `${$env.SUPABASE_URL}/rest/v1/clean_posts?select=post_id&is_relevant=eq.true&limit=1`;\nconst res = await fetch(url, {\n  method: 'HEAD',\n  headers: {\n    apikey: $env.SUPABASE_SERVICE_ROLE_KEY,\n    Authorization: `Bearer ${$env.SUPABASE_SERVICE_ROLE_KEY}`,\n    'Prefer': 'count=exact',\n  },\n});\nconst countHeader = res.headers.get('content-range') || '0/0';\nconst count = parseInt(countHeader.split('/').pop() || '0', 10);\nconst sufficient = count >= 10;\nreturn [{ json: { week_id: weekId, clean_posts_count: count, sufficient } }];\n",
+        "notes": "Gate volume : compte clean_posts pertinents via Supabase REST HEAD avec Prefer: count=exact. Threshold 10 posts."
+      },
+      "id": "code_volume_gate",
+      "name": "Code: volume_gate",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [680, 360]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{$json.sufficient}}",
+              "value2": true
+            }
+          ]
+        }
+      },
+      "id": "if_volume_ok",
+      "name": "IF volume_sufficient",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [900, 360]
+    },
+    {
+      "parameters": {
+        "authentication": "webhook",
+        "webhookUri": "={{$env.SLACK_WEBHOOK_URL}}",
+        "text": "=:warning: Nexus Editorial — week_id={{$node['Code: compute_week_id'].json.week_id}} ABORT.\\nVolume clean_posts insuffisant ({{$node['Code: volume_gate'].json.clean_posts_count}} < 10).",
+        "otherOptions": {}
+      },
+      "id": "slack_volume_abort",
+      "name": "Slack: Notify Volume Insufficient",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.2,
+      "position": [1120, 540]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://jugcyqtweavrltmxdogg.supabase.co/functions/v1/agent-3-post-analysis",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"limit\": 100\n}",
+        "options": {
+          "timeout": 600000,
+          "response": {
+            "response": {
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "id": "http_agent3",
+      "name": "HTTP: Agent 3 (PostAnalysis)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1120, 240],
+      "retryOnFail": true,
+      "maxTries": 2,
+      "waitBetweenTries": 30000,
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "kljZJ1zyoo3gifGa",
+          "name": "Nexus API Token"
+        }
+      },
+      "notes": "Edge Function Haiku 4.5 batch. Body fixe limit=100, lit clean_posts non analysés en DB. Timeout 10min."
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://jugcyqtweavrltmxdogg.supabase.co/functions/v1/agent-4-linkedin-trends",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"week_id\": \"{{$node['Code: compute_week_id'].json.week_id}}\"\n}",
+        "options": {
+          "timeout": 120000,
+          "response": {
+            "response": {
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "id": "http_agent4",
+      "name": "HTTP: Agent 4 (LinkedinTrends)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1340, 160],
+      "retryOnFail": true,
+      "maxTries": 2,
+      "waitBetweenTries": 30000,
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "kljZJ1zyoo3gifGa",
+          "name": "Nexus API Token"
+        }
+      },
+      "notes": "Edge Function Haiku 4.5 + post-processor déterministe."
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://jugcyqtweavrltmxdogg.supabase.co/functions/v1/agent-5-insurance-trends",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"week_id\": \"{{$node['Code: compute_week_id'].json.week_id}}\"\n}",
+        "options": {
+          "timeout": 120000,
+          "response": {
+            "response": {
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "id": "http_agent5",
+      "name": "HTTP: Agent 5 (InsuranceTrends)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1340, 320],
+      "retryOnFail": true,
+      "maxTries": 2,
+      "waitBetweenTries": 30000,
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "kljZJ1zyoo3gifGa",
+          "name": "Nexus API Token"
+        }
+      },
+      "notes": "Perplexity Sonar Pro séquentiel 7 clusters. Risque timeout 150s Edge Function — surveiller."
+    },
+    {
+      "parameters": {
+        "mode": "combineByPosition",
+        "options": {}
+      },
+      "id": "merge_45",
+      "name": "Merge: Wait Agents 4+5",
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 2.1,
+      "position": [1560, 240]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://jugcyqtweavrltmxdogg.supabase.co/functions/v1/agent-6-angles-generator",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"week_id\": \"{{$node['Code: compute_week_id'].json.week_id}}\"\n}",
+        "options": {
+          "timeout": 200000,
+          "response": {
+            "response": {
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "id": "http_agent6",
+      "name": "HTTP: Agent 6 (Angles Generator)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1780, 240],
+      "retryOnFail": true,
+      "maxTries": 2,
+      "waitBetweenTries": 30000,
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "kljZJ1zyoo3gifGa",
+          "name": "Nexus API Token"
+        }
+      },
+      "notes": "Opus 4.7. Timeout étendu 200s — historiquement 80-160s observé."
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://jugcyqtweavrltmxdogg.supabase.co/functions/v1/agent-7-editorial-director",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"week_id\": \"{{$node['Code: compute_week_id'].json.week_id}}\"\n}",
+        "options": {
+          "timeout": 200000,
+          "response": {
+            "response": {
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "id": "http_agent7",
+      "name": "HTTP: Agent 7 (Winners Selector)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [2000, 240],
+      "retryOnFail": true,
+      "maxTries": 2,
+      "waitBetweenTries": 30000,
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "kljZJ1zyoo3gifGa",
+          "name": "Nexus API Token"
+        }
+      },
+      "notes": "Opus 4.7. Lit angles+linkedin+insurance depuis DB. Timeout 200s."
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://jugcyqtweavrltmxdogg.supabase.co/functions/v1/agent-8-visual-decision",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"week_id\": \"{{$node['Code: compute_week_id'].json.week_id}}\"\n}",
+        "options": {
+          "timeout": 120000,
+          "response": {
+            "response": {
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "id": "http_agent8",
+      "name": "HTTP: Agent 8 (Visual Decision)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [2220, 160],
+      "retryOnFail": true,
+      "maxTries": 2,
+      "waitBetweenTries": 30000,
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "kljZJ1zyoo3gifGa",
+          "name": "Nexus API Token"
+        }
+      },
+      "notes": "Haiku 4.5 (visual decision)."
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://jugcyqtweavrltmxdogg.supabase.co/functions/v1/agent-9-timing-recommendation",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"week_id\": \"{{$node['Code: compute_week_id'].json.week_id}}\"\n}",
+        "options": {
+          "timeout": 30000,
+          "response": {
+            "response": {
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "id": "http_agent9",
+      "name": "HTTP: Agent 9 (Timing)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [2220, 320],
+      "retryOnFail": true,
+      "maxTries": 2,
+      "waitBetweenTries": 30000,
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "kljZJ1zyoo3gifGa",
+          "name": "Nexus API Token"
+        }
+      },
+      "notes": "Déterministe TS pur, <1s."
+    },
+    {
+      "parameters": {
+        "mode": "combineByPosition",
+        "options": {}
+      },
+      "id": "merge_89",
+      "name": "Merge: Wait Agents 8+9",
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 2.1,
+      "position": [2440, 240]
+    },
+    {
+      "parameters": {
+        "language": "javaScript",
+        "jsCode": "// Validation finale via Supabase REST direct : weekly_reports doit avoir\n// les 6 colonnes JSON alimentées pour la week_id.\nconst weekId = $node['Code: compute_week_id'].json.week_id;\nconst url = `${$env.SUPABASE_URL}/rest/v1/weekly_reports?week_id=eq.${encodeURIComponent(weekId)}&select=linkedin_trends_json,insurance_trends_json,angles_json,winners_json,visuals_json,timing_json`;\nconst res = await fetch(url, {\n  headers: {\n    apikey: $env.SUPABASE_SERVICE_ROLE_KEY,\n    Authorization: `Bearer ${$env.SUPABASE_SERVICE_ROLE_KEY}`,\n    Accept: 'application/json',\n  },\n});\nif (!res.ok) throw new Error(`weekly_reports_select_failed: HTTP ${res.status}`);\nconst rows = await res.json();\nif (!Array.isArray(rows) || rows.length === 0) {\n  throw new Error(`weekly_reports_row_missing: ${weekId}`);\n}\nconst data = rows[0];\nconst missing = [];\nif (!data.linkedin_trends_json) missing.push('linkedin_trends_json');\nif (!data.insurance_trends_json) missing.push('insurance_trends_json');\nif (!data.angles_json) missing.push('angles_json');\nif (!data.winners_json) missing.push('winners_json');\nif (!data.visuals_json) missing.push('visuals_json');\nif (!data.timing_json) missing.push('timing_json');\nif (missing.length > 0) {\n  throw new Error('incomplete_weekly_report: missing=' + missing.join(','));\n}\nreturn [{ json: { week_id: weekId, complete: true, columns_ok: 6 } }];\n",
+        "notes": "Gate qualité avant notification. Throw si une colonne JSON manque → capturé par Error Trigger."
+      },
+      "id": "code_validate_complete",
+      "name": "Code: validate_weekly_complete",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [2660, 240]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://jugcyqtweavrltmxdogg.supabase.co/functions/v1/notify-weekly-report",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"week_id\": \"{{$node['Code: compute_week_id'].json.week_id}}\"\n}",
+        "options": {
+          "timeout": 60000,
+          "response": {
+            "response": {
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "id": "http_notify",
+      "name": "HTTP: Notify Weekly Report (Resend)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [2880, 240],
+      "retryOnFail": true,
+      "maxTries": 2,
+      "waitBetweenTries": 30000,
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "kljZJ1zyoo3gifGa",
+          "name": "Nexus API Token"
+        }
+      },
+      "notes": "Email dimanche 8h (envoi immédiat ici). Free tier Resend, €0."
+    },
+    {
+      "parameters": {},
+      "id": "trg_error",
+      "name": "Error Trigger",
+      "type": "n8n-nodes-base.errorTrigger",
+      "typeVersion": 1,
+      "position": [240, 760]
+    },
+    {
+      "parameters": {
+        "authentication": "webhook",
+        "webhookUri": "={{$env.SLACK_WEBHOOK_URL}}",
+        "text": "=:rotating_light: Nexus Editorial — Branch B HTTP FAILURE.\\nweek_id: {{$node['Code: compute_week_id'].json.week_id}}\\nNode failed: {{$json.execution.lastNodeExecuted}}\\nRun id: {{$execution.id}}\\nError: {{$json.execution.error.message}}\\nTimestamp: {{$now.toISO()}}",
+        "otherOptions": {}
+      },
+      "id": "slack_error",
+      "name": "Slack: Notify Error",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.2,
+      "position": [460, 760]
+    }
+  ],
+  "connections": {
+    "Manual Trigger": {
+      "main": [[{ "node": "Code: compute_week_id", "type": "main", "index": 0 }]]
+    },
+    "Schedule Trigger Saturday 22h (disabled)": {
+      "main": [[{ "node": "Code: compute_week_id", "type": "main", "index": 0 }]]
+    },
+    "Code: compute_week_id": {
+      "main": [[{ "node": "Code: volume_gate", "type": "main", "index": 0 }]]
+    },
+    "Code: volume_gate": {
+      "main": [[{ "node": "IF volume_sufficient", "type": "main", "index": 0 }]]
+    },
+    "IF volume_sufficient": {
+      "main": [
+        [{ "node": "HTTP: Agent 3 (PostAnalysis)", "type": "main", "index": 0 }],
+        [{ "node": "Slack: Notify Volume Insufficient", "type": "main", "index": 0 }]
+      ]
+    },
+    "HTTP: Agent 3 (PostAnalysis)": {
+      "main": [
+        [
+          { "node": "HTTP: Agent 4 (LinkedinTrends)", "type": "main", "index": 0 },
+          { "node": "HTTP: Agent 5 (InsuranceTrends)", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "HTTP: Agent 4 (LinkedinTrends)": {
+      "main": [[{ "node": "Merge: Wait Agents 4+5", "type": "main", "index": 0 }]]
+    },
+    "HTTP: Agent 5 (InsuranceTrends)": {
+      "main": [[{ "node": "Merge: Wait Agents 4+5", "type": "main", "index": 1 }]]
+    },
+    "Merge: Wait Agents 4+5": {
+      "main": [[{ "node": "HTTP: Agent 6 (Angles Generator)", "type": "main", "index": 0 }]]
+    },
+    "HTTP: Agent 6 (Angles Generator)": {
+      "main": [[{ "node": "HTTP: Agent 7 (Winners Selector)", "type": "main", "index": 0 }]]
+    },
+    "HTTP: Agent 7 (Winners Selector)": {
+      "main": [
+        [
+          { "node": "HTTP: Agent 8 (Visual Decision)", "type": "main", "index": 0 },
+          { "node": "HTTP: Agent 9 (Timing)", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "HTTP: Agent 8 (Visual Decision)": {
+      "main": [[{ "node": "Merge: Wait Agents 8+9", "type": "main", "index": 0 }]]
+    },
+    "HTTP: Agent 9 (Timing)": {
+      "main": [[{ "node": "Merge: Wait Agents 8+9", "type": "main", "index": 1 }]]
+    },
+    "Merge: Wait Agents 8+9": {
+      "main": [[{ "node": "Code: validate_weekly_complete", "type": "main", "index": 0 }]]
+    },
+    "Code: validate_weekly_complete": {
+      "main": [[{ "node": "HTTP: Notify Weekly Report (Resend)", "type": "main", "index": 0 }]]
+    },
+    "Error Trigger": {
+      "main": [[{ "node": "Slack: Notify Error", "type": "main", "index": 0 }]]
+    }
+  },
+  "meta": {
+    "instanceId": "nexus-editorial",
+    "templateCredsSetupCompleted": false
+  },
+  "pinData": {}
+}
