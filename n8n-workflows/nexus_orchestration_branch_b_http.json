@@ -51,15 +51,50 @@
     },
     {
       "parameters": {
-        "language": "javaScript",
-        "jsCode": "// Volume gate via Supabase REST direct (Supabase service_role key dispo via $env).\nconst weekId = $node['Code: compute_week_id'].json.week_id;\nconst url = `${$env.SUPABASE_URL}/rest/v1/clean_posts?select=post_id&is_relevant=eq.true&limit=1`;\nconst res = await fetch(url, {\n  method: 'HEAD',\n  headers: {\n    apikey: $env.SUPABASE_SERVICE_ROLE_KEY,\n    Authorization: `Bearer ${$env.SUPABASE_SERVICE_ROLE_KEY}`,\n    'Prefer': 'count=exact',\n  },\n});\nconst countHeader = res.headers.get('content-range') || '0/0';\nconst count = parseInt(countHeader.split('/').pop() || '0', 10);\nconst sufficient = count >= 10;\nreturn [{ json: { week_id: weekId, clean_posts_count: count, sufficient } }];\n",
-        "notes": "Gate volume : compte clean_posts pertinents via Supabase REST HEAD avec Prefer: count=exact. Threshold 10 posts."
+        "method": "HEAD",
+        "url": "https://jugcyqtweavrltmxdogg.supabase.co/rest/v1/clean_posts?select=post_id&is_relevant=eq.true&limit=1",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "httpCustomAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "Prefer", "value": "count=exact" }
+          ]
+        },
+        "options": {
+          "timeout": 15000,
+          "response": {
+            "response": {
+              "fullResponse": true,
+              "responseFormat": "text"
+            }
+          }
+        }
       },
-      "id": "code_volume_gate",
-      "name": "Code: volume_gate",
+      "id": "http_volume_gate",
+      "name": "HTTP: Volume Gate",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [620, 360],
+      "credentials": {
+        "httpCustomAuth": {
+          "id": "i30YgXS1wC5UwKtK",
+          "name": "Supabase Service Role (Nexus Editorial)"
+        }
+      },
+      "notes": "HEAD vers clean_posts avec Prefer: count=exact. Auth via credential httpCustomAuth (apikey + Authorization). fullResponse=true pour exposer content-range au node suivant."
+    },
+    {
+      "parameters": {
+        "language": "javaScript",
+        "jsCode": "// Parse pur de la reponse HTTP Volume Gate.\n// Aucune variable d'environnement, aucun fetch — uniquement input + node refs.\nconst weekId = $node['Code: compute_week_id'].json.week_id;\nconst resp = $input.first().json;\nconst headers = resp && resp.headers ? resp.headers : {};\nconst countHeader = headers['content-range'] || headers['Content-Range'] || '0/0';\nconst count = parseInt(String(countHeader).split('/').pop() || '0', 10);\nconst sufficient = count >= 10;\nreturn [{ json: { week_id: weekId, clean_posts_count: count, sufficient } }];\n",
+        "notes": "Parse pur (sans $env, sans fetch). Lit content-range exposé par HTTP Volume Gate (fullResponse=true) et calcule sufficient = count >= 10."
+      },
+      "id": "code_parse_volume",
+      "name": "Code: parse_volume",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [680, 360]
+      "position": [780, 360]
     },
     {
       "parameters": {
@@ -86,7 +121,7 @@
         "nodeCredentialType": "httpHeaderAuth",
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={\n  \"from\": \"onboarding@resend.dev\",\n  \"to\": [\"aaa.projekt06@gmail.com\"],\n  \"subject\": \"Nexus Editorial — volume insuffisant pour {{$node['Code: compute_week_id'].json.week_id}}\",\n  \"text\": \"Nexus Editorial — week_id={{$node['Code: compute_week_id'].json.week_id}} ABORT.\\n\\nVolume clean_posts insuffisant ({{$node['Code: volume_gate'].json.clean_posts_count}} < 10).\\n\\nLa branche s'est arrêtée avant Agent 3. Aucun coût LLM consommé.\\n\\n— Nexus Editorial (Branch B HTTP)\"\n}",
+        "jsonBody": "={\n  \"from\": \"onboarding@resend.dev\",\n  \"to\": [\"aaa.projekt06@gmail.com\"],\n  \"subject\": \"Nexus Editorial — volume insuffisant pour {{$node['Code: compute_week_id'].json.week_id}}\",\n  \"text\": \"Nexus Editorial — week_id={{$node['Code: compute_week_id'].json.week_id}} ABORT.\\n\\nVolume clean_posts insuffisant ({{$node['Code: parse_volume'].json.clean_posts_count}} < 10).\\n\\nLa branche s'est arrêtée avant Agent 3. Aucun coût LLM consommé.\\n\\n— Nexus Editorial (Branch B HTTP)\"\n}",
         "options": {
           "timeout": 30000,
           "response": {
@@ -463,9 +498,12 @@
       "main": [[{ "node": "Code: compute_week_id", "type": "main", "index": 0 }]]
     },
     "Code: compute_week_id": {
-      "main": [[{ "node": "Code: volume_gate", "type": "main", "index": 0 }]]
+      "main": [[{ "node": "HTTP: Volume Gate", "type": "main", "index": 0 }]]
     },
-    "Code: volume_gate": {
+    "HTTP: Volume Gate": {
+      "main": [[{ "node": "Code: parse_volume", "type": "main", "index": 0 }]]
+    },
+    "Code: parse_volume": {
       "main": [[{ "node": "IF volume_sufficient", "type": "main", "index": 0 }]]
     },
     "IF volume_sufficient": {
