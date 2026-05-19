@@ -80,16 +80,34 @@
     },
     {
       "parameters": {
-        "authentication": "webhook",
-        "webhookUri": "={{$env.SLACK_WEBHOOK_URL}}",
-        "text": "=:warning: Nexus Editorial — week_id={{$node['Code: compute_week_id'].json.week_id}} ABORT.\\nVolume clean_posts insuffisant ({{$node['Code: volume_gate'].json.clean_posts_count}} < 10).",
-        "otherOptions": {}
+        "method": "POST",
+        "url": "https://api.resend.com/emails",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"from\": \"onboarding@resend.dev\",\n  \"to\": [\"aaa.projekt06@gmail.com\"],\n  \"subject\": \"Nexus Editorial — volume insuffisant pour {{$node['Code: compute_week_id'].json.week_id}}\",\n  \"text\": \"Nexus Editorial — week_id={{$node['Code: compute_week_id'].json.week_id}} ABORT.\\n\\nVolume clean_posts insuffisant ({{$node['Code: volume_gate'].json.clean_posts_count}} < 10).\\n\\nLa branche s'est arrêtée avant Agent 3. Aucun coût LLM consommé.\\n\\n— Nexus Editorial (Branch B HTTP)\"\n}",
+        "options": {
+          "timeout": 30000,
+          "response": {
+            "response": {
+              "responseFormat": "json"
+            }
+          }
+        }
       },
-      "id": "slack_volume_abort",
-      "name": "Slack: Notify Volume Insufficient",
-      "type": "n8n-nodes-base.slack",
-      "typeVersion": 2.2,
-      "position": [1120, 540]
+      "id": "email_volume_abort",
+      "name": "Email: Volume Insufficient",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1120, 540],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "M9YhYGFikCqXmIkZ",
+          "name": "Resend API"
+        }
+      },
+      "notes": "Email ABORT (volume gate < 10). Resend API, free tier."
     },
     {
       "parameters": {
@@ -407,16 +425,34 @@
     },
     {
       "parameters": {
-        "authentication": "webhook",
-        "webhookUri": "={{$env.SLACK_WEBHOOK_URL}}",
-        "text": "=:rotating_light: Nexus Editorial — Branch B HTTP FAILURE.\\nweek_id: {{$node['Code: compute_week_id'].json.week_id}}\\nNode failed: {{$json.execution.lastNodeExecuted}}\\nRun id: {{$execution.id}}\\nError: {{$json.execution.error.message}}\\nTimestamp: {{$now.toISO()}}",
-        "otherOptions": {}
+        "method": "POST",
+        "url": "https://api.resend.com/emails",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"from\": \"onboarding@resend.dev\",\n  \"to\": [\"aaa.projekt06@gmail.com\"],\n  \"subject\": \"Nexus Editorial — erreur workflow {{$node['Code: compute_week_id'].json.week_id}}\",\n  \"text\": \"Nexus Editorial — Branch B HTTP FAILURE.\\n\\nweek_id: {{$node['Code: compute_week_id'].json.week_id}}\\nNode failed: {{$json.execution.lastNodeExecuted}}\\nRun id: {{$execution.id}}\\nError: {{$json.execution.error.message}}\\nTimestamp: {{$now.toISO()}}\\n\\nOuvrir l'exécution : https://aaaprojekt.app.n8n.cloud/workflow/dCsNhJf5FeLRc5uu/executions/{{$execution.id}}\\n\\n— Nexus Editorial (Branch B HTTP)\"\n}",
+        "options": {
+          "timeout": 30000,
+          "response": {
+            "response": {
+              "responseFormat": "json"
+            }
+          }
+        }
       },
-      "id": "slack_error",
-      "name": "Slack: Notify Error",
-      "type": "n8n-nodes-base.slack",
-      "typeVersion": 2.2,
-      "position": [460, 760]
+      "id": "email_error",
+      "name": "Email: Notify Error",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [460, 760],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "M9YhYGFikCqXmIkZ",
+          "name": "Resend API"
+        }
+      },
+      "notes": "Email FAILURE via Resend API depuis Error Trigger. Free tier."
     }
   ],
   "connections": {
@@ -435,7 +471,7 @@
     "IF volume_sufficient": {
       "main": [
         [{ "node": "HTTP: Agent 3 (PostAnalysis)", "type": "main", "index": 0 }],
-        [{ "node": "Slack: Notify Volume Insufficient", "type": "main", "index": 0 }]
+        [{ "node": "Email: Volume Insufficient", "type": "main", "index": 0 }]
       ]
     },
     "HTTP: Agent 3 (PostAnalysis)": {
@@ -479,7 +515,7 @@
       "main": [[{ "node": "HTTP: Notify Weekly Report (Resend)", "type": "main", "index": 0 }]]
     },
     "Error Trigger": {
-      "main": [[{ "node": "Slack: Notify Error", "type": "main", "index": 0 }]]
+      "main": [[{ "node": "Email: Notify Error", "type": "main", "index": 0 }]]
     }
   },
   "meta": {
