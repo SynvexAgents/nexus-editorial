@@ -10,10 +10,12 @@
  *   2. Si visual_recommended=true :
  *      - visual_type DOIT être ≠ "aucun" → flag critique si "aucun"
  *        (on n'override pas, c'est ambigu — Marouane décide).
- *      - gamma_prompt DOIT être ≥ 50 caractères → flag si trop court.
+ *      - gamma_prompt DOIT être entre 400 et 1000 caractères (v2.1).
+ *        Cible idéale 500-800 → flag si hors cible mais dans bornes Zod.
+ *        Cible 500-800 = brief Gamma structuré complet (6 sections).
  *
  * Note : le schéma Zod superRefine bloque déjà les cas 2 à l'entrée
- * (visual_type='aucun' + recommended=true ou gamma_prompt<50 + true).
+ * (visual_type='aucun' + recommended=true ou gamma_prompt hors [400,1000]).
  * Ce post-processor reste utile pour les cas 1 (recommended=false mais
  * type/prompt non cohérents), qui passent Zod mais sont sémantiquement
  * erronés.
@@ -78,9 +80,18 @@ export function postProcessVisuals(visuals: VisualsArray): PostProcessVisualsOut
           `position ${mutable.post_position}: visual_recommended=true mais visual_type="aucun" (incohérence Zod-bypass).`,
         );
       }
-      if (mutable.gamma_prompt.length < 50) {
+      const len = mutable.gamma_prompt.length;
+      if (len < 400) {
         criticalFlags.push(
-          `position ${mutable.post_position}: visual_recommended=true mais gamma_prompt < 50 chars (${mutable.gamma_prompt.length}).`,
+          `position ${mutable.post_position}: visual_recommended=true mais gamma_prompt ${len}c < 400 (bornes Zod 400-1000, cible 500-800).`,
+        );
+      } else if (len < 500) {
+        criticalFlags.push(
+          `position ${mutable.post_position}: gamma_prompt ${len}c sous la cible (500-800), risque de brief sous-spécifié.`,
+        );
+      } else if (len > 800) {
+        criticalFlags.push(
+          `position ${mutable.post_position}: gamma_prompt ${len}c au-dessus de la cible (500-800), risque de bruit qui dilue les instructions.`,
         );
       }
     }

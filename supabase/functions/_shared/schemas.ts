@@ -253,11 +253,19 @@ export const visualDecisionSchema = z
     gamma_prompt: z.string(),
   })
   .superRefine((data, ctx) => {
-    if (data.visual_recommended && data.gamma_prompt.length < 50) {
+    // v2.1 brief Gamma structuré : bornes 400-1000, cible 500-800.
+    if (data.visual_recommended && data.gamma_prompt.length < 400) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
         path: ['gamma_prompt'],
-        message: 'gamma_prompt must be ≥ 50 chars when visual_recommended is true',
+        message: 'gamma_prompt must be ≥ 400 chars when visual_recommended is true (target 500-800)',
+      });
+    }
+    if (data.visual_recommended && data.gamma_prompt.length > 1000) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['gamma_prompt'],
+        message: 'gamma_prompt must be ≤ 1000 chars when visual_recommended is true (target 500-800)',
       });
     }
     if (data.visual_recommended && data.visual_type === 'aucun') {

@@ -95,16 +95,20 @@ ${tone}
 
 === MISSION — 6 ÉTAPES ===
 
-ÉTAPE 1 — SCORING DES 8 ANGLES
+ÉTAPE 1 — SCORING DES 8 ANGLES (v2.1 — 6 sous-scores)
 
-Pour chacun des 8 angles, 5 sous-scores entiers /10 :
+Pour chacun des 8 angles, 6 sous-scores entiers /10 :
 - engagement_potentiel
 - credibilite
 - autorite_synvex
 - transferabilite
 - risque (INVERSE : 10 = aucun risque)
+- lead_trigger_presence (NEW — v2.1) : présence d'au moins 1 des 4 leviers lead-generating dans l'angle source — take controversée mesurée, asymétrie d'information, mini-cas chiffré anonymisé, lead magnet implicite (cf. system prompt Agent 6 §MÉCANIQUES LEAD-GENERATING). 0 = angle purement descriptif/analytique. 10 = lead trigger explicite et défendable.
 
-score_total = eng×0.25 + cred×0.25 + autorite×0.20 + transf×0.15 + risque×0.15.
+score_total = eng×0.20 + cred×0.15 + autorite×0.15 + transf×0.10 + risque×0.15 + lead_trigger×0.25.
+(Pondération v2.1 : lead_trigger pèse 25%, le plus lourd. Réduction proportionnelle des autres pour conserver une somme = 100%.)
+
+ALERTE LEAD TRIGGER : si AUCUN des 3 winners sélectionnés n'a un lead_trigger_presence ≥ 6, REMONTER un champ top-level "editorial_warning" dans la sortie JSON avec valeur "no_lead_trigger_in_winners" (string). Format : { "winners": [...], "editorial_warning": "no_lead_trigger_in_winners" }. Sinon ne pas inclure le champ.
 
 ÉTAPE 2 — FUSIONS POSSIBLES (0-2)
 
@@ -132,6 +136,37 @@ K. **BRIDGE PRODUIT EN FIN DE POST (v2)** : selon produit_synvex_ancrage du winn
 L. **MENTION IA OPÉRATIONNELLE (v2)** : chaque post doit mentionner l'IA en mode A subtil ("acteurs avancés y répondent par X type d'automatisation"), B direct ("agent IA correctement calibré résout en quelques minutes"), ou C démonstratif anonymisé ("un opérateur récent : agent qui ingère X, sort Y"). Jamais "ça reste manuel partout".
 M. **MENTION CLIENTS EN GÉNÉRIQUE ANONYMISÉ** : jamais Phenomen/Henner/MSH. Toujours "un de mes clients", "un opérateur récent", "sur un déploiement courtage".
 
+=== GARDE-FOUS ÉDITORIAUX (v2.1 mai 2026) ===
+
+GF1 — ZÉRO NOM PROPRE D'ENTITÉ (clients, prospects, concurrents)
+Aucune mention nominale d'un cabinet, courtier, MGA, mutuelle, insurtech ou compagnie identifiable, même louangeuse. Toujours générique : "un cabinet courtage IARD", "un MGA spécialisé en dommage", "un opérateur récent en mutuelle régionale". Vise au-delà de la liste Phenomen/Henner/MSH : aucune marque tierce du marché français de l'assurance ne doit apparaître dans le contenu.
+
+GF2 — ZÉRO CHIFFRE PROJECTIF NON SOURCÉ
+Tout chiffre du post doit être OBSERVÉ (passé/présent), pas projeté. Interdits : "X cabinets vont perdre leur agrément d'ici 2027", "Y% du marché aura basculé en 2028", "vous économiserez 80% de temps". Autorisés : "9 sur 12 cabinets observés ce trimestre", "audit ACPR mars 2026 : 13 M€ de sanction", "délai moyen passé de 18 jours à 36 heures sur 6 derniers dossiers accompagnés". Si le chiffre est une projection, le marquer comme telle ("notre hypothèse pour 2027 : ...") et la défendre dans le post.
+
+GF3 — UNE SEULE MENTION IA PAR POST (maximum)
+Le mot "IA", "intelligence artificielle", "agent IA", "LLM", "modèle" ne doit apparaître QU'UNE SEULE FOIS dans tout le post_final. Une fois suffit pour le bridge. Plus de mentions = post qui sonne marketing-IA générique au lieu de retour d'expérience terrain. Si tu as besoin de re-référencer l'IA, utilise une formulation indirecte ("l'automatisation", "ce type d'outillage", "ce que ça change opérationnellement").
+
+=== RÈGLE BRIDGE PRODUIT QUANTIFIÉ (v2.1) ===
+
+Quand le post mentionne la mécanique IA Synvex (bridge subtil ou moyen), formuler en terme de résultat business observable, PAS en description technique du mécanisme.
+
+INTERDICTION (description du mécanisme) :
+- "agents qui argumentent une décision, se contestent, laissent une trace lisible"
+- "l'agent ingère le PDF, extrait les clauses, structure la sortie"
+- "système multi-agents qui analyse, débat et conclut"
+
+OBLIGATION (résultat chiffré ou métrique opérationnelle) :
+- "Sur les 6 derniers dossiers de contrôle accompagnés, le délai de production de l'audit trail est passé de 18 jours en moyenne à 36 heures."
+- "Sur un déploiement courtage récent : 3 semaines à 4 jours pour répondre à un contrôle ACPR."
+- "Un cabinet : audit raté en mars, audit suivant 8 semaines plus tard passé avec 0 réserve."
+
+Format préféré du bridge quantifié :
+[contexte client anonymisé] + [chiffre avant/après ou métrique opérationnelle] + [mention IA en cause subordonnée, pas en sujet principal].
+
+Exemple complet correct :
+"Sur les 6 derniers dossiers de contrôle accompagnés, le délai de production de l'audit trail est passé de 18 jours en moyenne à 36 heures. L'IA n'a pas remplacé le gestionnaire — elle a externalisé la traçabilité au moment de la gestion."
+
 ÉTAPE 5 — 3 HOOK_VARIANTES par winner (tuple 3 strings).
 
 ÉTAPE 6 — AUTO-CHECK QUALITÉ (6 booleans honnêtes) :
@@ -146,11 +181,13 @@ M. **MENTION CLIENTS EN GÉNÉRIQUE ANONYMISÉ** : jamais Phenomen/Henner/MSH. T
 
 === FORMAT SORTIE ===
 
-JSON strict { "winners": [3 entrées], "all_scoring": [8 entrées]?, "fusions_proposees": [...]? }.
+JSON strict { "winners": [3 entrées], "all_scoring": [8 entrées]?, "fusions_proposees": [...]?, "editorial_warning": "..."? }.
 Chaque winner :
 { post_position (1|2|3), winner_id, fusion_used (false ou [id1, id2]), scoring (array), rationale_strategique, post_final, hook_variantes (3 strings), cta_recommande, longueur_finale (int>0), checklist_qualite_passee (6 booleans), produit_synvex_ancrage (enum 9 produits — hérité de l'angle source) }.
 
-scoring : chaque entrée DOIT contenir { angle_id, score_total, sous_scores, commentaire }. Le champ sous_scores est OBLIGATOIRE — objet {engagement_potentiel, credibilite, autorite_synvex, transferabilite, risque} (5 entiers /10). Ne JAMAIS omettre sous_scores, même si le score_total est bas.
+scoring : chaque entrée DOIT contenir { angle_id, score_total, sous_scores, commentaire }. Le champ sous_scores est OBLIGATOIRE — objet {engagement_potentiel, credibilite, autorite_synvex, transferabilite, risque, lead_trigger_presence} (6 entiers /10, v2.1). Ne JAMAIS omettre sous_scores, même si le score_total est bas.
+
+editorial_warning (TOP-LEVEL, optionnel) : si AUCUN des 3 winners n'a lead_trigger_presence ≥ 6, inclure "editorial_warning": "no_lead_trigger_in_winners" pour que l'orchestrateur remonte le problème dans son log. Sinon, omettre.
 
 Ordre post_position 1, 2, 3. Aucun texte hors JSON.`;
 }
@@ -402,8 +439,12 @@ Deno.serve(async (req: Request) => {
     ];
 
     let lastError: string | null = null;
-    let final: { winners: WeeklyWinners; usage: Record<string, number>; retried: boolean } | null =
-      null;
+    let final: {
+      winners: WeeklyWinners;
+      usage: Record<string, number>;
+      retried: boolean;
+      editorial_warning: string | null;
+    } | null = null;
 
     for (let attempt = 1; attempt <= 2; attempt += 1) {
       const resp = await callAnthropic({
@@ -431,6 +472,13 @@ Deno.serve(async (req: Request) => {
         typeof parsed === 'object' && parsed && 'winners' in parsed
           ? (parsed as { winners: unknown }).winners
           : parsed;
+      const editorialWarning =
+        typeof parsed === 'object' &&
+        parsed &&
+        'editorial_warning' in parsed &&
+        typeof (parsed as { editorial_warning: unknown }).editorial_warning === 'string'
+          ? ((parsed as { editorial_warning: string }).editorial_warning as string)
+          : null;
       const zod = weeklyWinnersSchema.safeParse(winnersRaw);
       if (!zod.success) {
         const issue = zod.error.issues[0];
@@ -453,6 +501,7 @@ Deno.serve(async (req: Request) => {
           cache_read_input_tokens: resp.usage.cache_read_input_tokens ?? 0,
         },
         retried: attempt > 1,
+        editorial_warning: editorialWarning,
       };
       break;
     }
@@ -487,6 +536,7 @@ Deno.serve(async (req: Request) => {
         duration_ms: duration,
         cost_eur: cost.cost_eur,
         retried: final.retried,
+        editorial_warning: final.editorial_warning,
         ...pp.report,
       },
       'agent_7_done',
@@ -499,6 +549,7 @@ Deno.serve(async (req: Request) => {
       cost_usd: cost.cost_usd,
       cost_eur: cost.cost_eur,
       validation_report: pp.report,
+      editorial_warning: final.editorial_warning,
     });
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);

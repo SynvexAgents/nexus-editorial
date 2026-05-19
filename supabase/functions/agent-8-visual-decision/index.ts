@@ -29,15 +29,58 @@ const SYSTEM_PROMPT_VISUAL = `Tu es Visual Decision pour Synvex. Tu reçois 3 po
 
 3. \`visual_reason\` (1-2 lignes, sec, factuel)
 
-4. \`gamma_prompt\` : SI visual_recommended=true, prompt EXACT pour Gamma.app.
-   - 50-300 chars, descriptif, sans jargon Synvex.
-   - Style imposé : "minimaliste, palette neutre (gris/bleu nuit/blanc), typographie sérieuse, aucune illustration gimmick".
-   - SI visual_recommended=false → gamma_prompt = "".
+4. \`gamma_prompt\` (BRIEF GAMMA STRUCTURÉ, v2.1) :
+   SI visual_recommended=true : un brief EXHAUSTIF de 500-800 caractères qui permet à Gamma.app de générer le carrousel sans recadrage manuel.
+   SI visual_recommended=false : gamma_prompt = "" (string vide).
+
+   STRUCTURE OBLIGATOIRE DU BRIEF (sections numérotées 1 à 6, séparées par \\n) :
+
+   1. TYPE & FORMAT (1 ligne)
+      "Carrousel LinkedIn 6 slides, format portrait 4:5"
+      Ou : "Single image, format carré 1:1"
+      Ou : "Data viz unique, format paysage 16:9"
+
+   2. COPY SLIDE PAR SLIDE (1 ligne par slide pour carrousel, 1 paragraphe pour single image)
+      Slide 1 : [titre exact 5-8 mots] / [sous-titre 1 phrase]
+      Slide 2 : [titre] / [bullet 1] / [bullet 2] / [bullet 3]
+      Slide 3 : [titre] / [chiffre central XX%] / [contexte 1 phrase]
+      Slide 4 : [titre] / [insight clé en citation]
+      Slide 5 : [titre récap] / [3 bullets actionnables]
+      Slide 6 : [CTA visuel : phrase + signature Synvex discrète]
+
+   3. HIÉRARCHIE VISUELLE (1 ligne)
+      "Slide 1 : titre 64pt centré. Slide 3 : chiffre 120pt centré + caption 18pt en bas. Slides 2/4/5 : titre 36pt en haut gauche + body 20pt."
+
+   4. PALETTE & TYPO (1 ligne)
+      "Palette : fond gris bleu nuit #0F1419, texte blanc cassé #F5F5F0, accent violet Synvex #7C3AED. Typo : Inter Bold pour titres, Inter Regular pour body, Inter Semibold (600) pour chiffres centraux."
+
+   5. ILLUSTRATIONS / ÉLÉMENTS GRAPHIQUES (1 ligne)
+      "Pas d'illustrations marketing. Slide 3 : barre horizontale simple comparant 18 jours vs 36 heures. Slide 5 : 3 icones minimalistes monochrome violet (checkmark, clock, shield)."
+
+   6. TONE & DENSITÉ (1 ligne)
+      "Tone : sobre, sérieux, premium. Densité texte : minimaliste sur slides 1/3/6, modérée sur slides 2/4/5. Aucune emoji, aucune métaphore visuelle clichée."
+
+   CONTRAINTE LONGUEUR : 500-800 caractères au TOTAL. Plus court = sous-spécifié (Gamma improvisera mal). Plus long = bruit qui dilue les instructions clés.
+
+EXEMPLE DE BRIEF COMPLET (pour calibrer ton output) :
+
+"Carrousel LinkedIn 6 slides, format portrait 4:5.
+Slide 1 : 'L'audit trail est devenu le nouveau passeport délégation' / 'Ce qui se joue dans les 18 prochains mois en distribution assurance'.
+Slide 2 : 'Le contexte ACPR 2026' / 'Sanction 13 mai 20M€' / 'Motif : devoir de conseil non documenté' / 'Effet domino sur toute la chaîne de distribution'.
+Slide 3 : 'L'écart à combler' / '3 sur 12' / 'cabinets tiennent un tirage au sort de 3 dossiers sur l'audit trail opérationnel'.
+Slide 4 : 'L'angle mort' / Citation : 'La plupart des cabinets ont des procédures écrites. Peu ont une traçabilité opérationnelle qui tient au contrôle.'
+Slide 5 : '3 critères d'un audit trail défendable' / 'Horodatage de chaque décision' / 'Justification documentée par dossier' / 'Restitution en moins de 24h sur demande'.
+Slide 6 : 'Comment vous documentez le conseil sur vos dossiers complexes aujourd'hui ?' / Signature discrète 'Synvex — agents IA pour la conformité opérationnelle'.
+Hiérarchie : titre 64pt slide 1, chiffre 120pt slide 3, body 20pt ailleurs.
+Palette : fond #0F1419, texte #F5F5F0, accent #7C3AED. Typo Inter (Bold titres, Regular body, Semibold chiffres).
+Slide 3 : barre horizontale simple 3/12 vs 9/12. Slide 5 : 3 icones minimalistes monochrome violet. Pas d'autres illustrations.
+Tone : sobre premium. Densité minimaliste slides 1/3/6, modérée slides 2/4/5. Zéro emoji."
 
 RÈGLES :
-- Aucune mention Synvex / Orion / Helios / Chiron / Hermès / Argus / Atlas / Cortex.
-- Aucun emoji.
+- Aucune mention Synvex / Orion / Helios / Chiron / Hermès / Argus / Atlas / Cortex dans le COPY des slides 1-5 (slide 6 peut mentionner Synvex discrètement en signature uniquement).
+- Aucun emoji dans tout le brief.
 - post_position correspond à celui en entrée (1, 2, 3).
+- gamma_prompt entre 500 et 800 chars quand visual_recommended=true (validation Zod min 400 / max 1000 ; on vise 500-800 pour confort).
 
 SORTIE : JSON strict { "visuals": [...] } EXACTEMENT 3 entrées (ordre post_position 1, 2, 3). Aucun texte hors JSON.`;
 
@@ -84,7 +127,12 @@ function postProcessVisuals(visuals: VisualDecision[]): {
     } else {
       if (m.visual_type === 'aucun')
         flags.push(`pos ${m.post_position}: type=aucun avec recommended=true`);
-      if (m.gamma_prompt.length < 50) flags.push(`pos ${m.post_position}: gamma_prompt < 50 chars`);
+      const len = m.gamma_prompt.length;
+      if (len < 400) flags.push(`pos ${m.post_position}: gamma_prompt ${len}c < 400 (Zod min)`);
+      else if (len < 500)
+        flags.push(`pos ${m.post_position}: gamma_prompt ${len}c < 500 (cible 500-800)`);
+      else if (len > 800)
+        flags.push(`pos ${m.post_position}: gamma_prompt ${len}c > 800 (cible 500-800)`);
     }
     return m;
   });

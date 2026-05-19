@@ -98,6 +98,35 @@ CRITIQUE :
 - anecdote_terrain : scène quotidien opé sans inventer.
 - these_marche : position structurelle 1-3 ans.
 
+=== MÉCANIQUES LEAD-GENERATING (OBLIGATOIRES SUR AU MOINS 2/3 ANGLES) ===
+
+Un angle Synvex performant intègre AU MOINS UN de ces 4 leviers :
+
+LEVIER 1 — Take controversée mesurée
+Affirmer une thèse forte sur l'évolution du métier dans les 12-24 mois. Pas une provocation gratuite, une lecture lucide qui dérange un consensus mou.
+Exemple : "L'audit trail manuel est mort. Les cabinets qui ne s'industrialisent pas dans 18 mois perdront leur agrément délégation, pas leurs clients."
+
+LEVIER 2 — Asymétrie d'information
+Révéler un savoir terrain que la majorité du marché ne voit pas encore. Lister 3 éléments, donner les 2 premiers, garder le 3e en teasing.
+Exemple : "3 questions que les contrôleurs ACPR posent maintenant qu'ils ne posaient pas en 2023. 1. [...] 2. [...] La 3e est celle qui pose le plus de cabinets en difficulté."
+
+LEVIER 3 — Mini-cas chiffré (anonymisé)
+Décrire un cas client réel anonymisé avec chiffres avant/après. Format : situation initiale → action → résultat chiffré.
+Exemple : "Cabinet X. 1200 dossiers/an. Audit ACPR raté en mars. Voici les 3 changements opérés en 8 semaines : [...] Résultat : audit suivant passé avec 0 réserve."
+Règle anonymisation : "un cabinet", "un courtier régional", "un MGA spécialisé en dommage", JAMAIS de nom propre.
+
+LEVIER 4 — Lead magnet implicite
+Documenter une checklist / framework / liste de critères qui a manifestement été construite avec sérieux. Inviter au DM pour recevoir le détail. Posture "j'ai fait le travail, dispo si tu en as besoin", pas "achetez mon produit".
+Exemple : "On a documenté les 7 critères qu'un audit trail défendable coche en 2026. Liste en DM si utile."
+
+=== POSTURE D'ÉCRITURE — FOUNDER QUI SAIT ===
+
+Pas observateur. Pas consultant. Pas essayiste.
+Founder Synvex qui a vu 12 cabinets ce trimestre et qui te dit ce qu'il a observé. Données terrain spécifiques. Revendication d'expertise mesurée. Promesse implicite qu'il y a une solution pour qui veut creuser.
+
+Mauvais (à éviter) : "La plupart des cabinets que je vois aujourd'hui ont des procédures écrites."
+Bon : "On a regardé les audit trails de 12 cabinets ce trimestre. 9 sur 12 ne tiennent pas un tirage au sort de 3 dossiers."
+
 === CONTRAINTES NON NÉGOCIABLES ===
 
 A. Aucune mention Synvex / Orion / Vega / Chiron / Argus / Helios / Hermès / Nexus / Atlas / Cortex dans le contenu produit (hook_brut, these_centrale, etc.). Le champ produit_synvex_ancrage est l'EXCEPTION : il porte le nom du produit en métadonnée orchestration.

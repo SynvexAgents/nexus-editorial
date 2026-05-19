@@ -62,6 +62,39 @@ describe('weeklyWinnersSchema', () => {
   });
 });
 
+describe('angleScoring.sous_scores accepts the v2.1 lead_trigger_presence key', () => {
+  it('parses sous_scores avec les 6 sous-scores v2.1 incluant lead_trigger_presence', () => {
+    const winnerWithLeadTrigger = {
+      ...validFixture[0],
+      scoring: [
+        {
+          angle_id: 'W21-A1',
+          score_total: 0.84,
+          sous_scores: {
+            engagement_potentiel: 8,
+            credibilite: 7,
+            autorite_synvex: 7,
+            transferabilite: 8,
+            risque: 9,
+            // v2.1 (mai 2026) : nouveau sous-score lead-generating
+            lead_trigger_presence: 9,
+          },
+          commentaire: 'Mini-cas chiffré 9 sur 12 cabinets — lead trigger fort.',
+        },
+      ],
+    };
+    const result = weeklyWinnersSchema.safeParse([
+      winnerWithLeadTrigger,
+      validFixture[1],
+      validFixture[2],
+    ]);
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data[0]?.scoring[0]?.sous_scores?.lead_trigger_presence).toBe(9);
+    }
+  });
+});
+
 describe('angleScoring.sous_scores tolerance (Opus 4.7 omet parfois ce champ)', () => {
   it('defaults sous_scores to {} when Opus omits the field', () => {
     const winnerWithoutSousScores = {

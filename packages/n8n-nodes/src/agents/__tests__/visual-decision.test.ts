@@ -61,14 +61,14 @@ function makeValidVisuals(): VisualsArray {
       visual_type: 'carrousel_4',
       visual_reason: 'Pédagogie technique : 4 slides pour décomposer la mécanique.',
       gamma_prompt:
-        'Carrousel 4 slides minimaliste, palette neutre gris/bleu nuit/blanc, typographie sérieuse. Slide 1 : titre + chiffre clé. Slide 2 : mécanique réglementaire. Slide 3 : impact opérationnel. Slide 4 : conclusion.',
+        "Carrousel LinkedIn 4 slides, format portrait 4:5.\nSlide 1 : 'Le ratio S/P courtage IARD : ce qui change en 2026' / 'Le contexte ACPR et son effet domino'.\nSlide 2 : 'Le mécanisme réglementaire' / 'Sanction 13 mai' / 'Devoir de conseil non documenté' / 'Périmètre étendu aux délégataires'.\nSlide 3 : 'Impact opérationnel' / '3 sur 12' / 'cabinets tiennent un tirage au sort de 3 dossiers'.\nSlide 4 : 'Question terrain' / 'Comment vous documentez le conseil aujourd hui ?'\nHiérarchie : titre 64pt slide 1, chiffre 120pt slide 3, body 20pt ailleurs.\nPalette : fond #0F1419, texte #F5F5F0, accent #7C3AED. Typo Inter (Bold titres, Regular body, Semibold chiffres).\nTone sobre premium. Densité minimaliste slides 1/4, modérée 2/3. Zéro emoji.",
     }),
     makeVisual(3, {
       visual_recommended: true,
       visual_type: 'carrousel_6',
       visual_reason: 'Thèse marché longue : 6 slides pour étapes 2026-2028.',
       gamma_prompt:
-        'Carrousel 6 slides minimaliste, palette neutre, typographie sérieuse. Slide 1 : titre thèse marché. Slides 2-5 : étapes 2026, 2027, 2028 avec un chiffre par étape. Slide 6 : implication structurelle. Aucune illustration gimmick.',
+        "Carrousel LinkedIn 6 slides, format portrait 4:5.\nSlide 1 : 'Thèse marché 2026-2028' / 'Ce qui se joue en distribution assurance'.\nSlide 2 : 'Étape 2026' / 'Audit trail standard exigé' / '70% cabinets non conformes'.\nSlide 3 : 'Étape 2027' / 'Sanctions ACPR x3' / 'Pertes d agrément délégation'.\nSlide 4 : 'Étape 2028' / 'Réorganisation marché courtage' / 'Consolidation top 30'.\nSlide 5 : 'Implication structurelle' / 'L industrialisation devient le seuil'.\nSlide 6 : 'Question terrain' / 'Vous êtes prêts pour mars 2027 ?' / Signature discrète Synvex.\nHiérarchie : titre 64pt slide 1, chiffres 80pt slides 2-4, body 20pt ailleurs.\nPalette : fond #0F1419, texte #F5F5F0, accent #7C3AED. Typo Inter complète. Tone sobre. Zéro emoji.",
     }),
   ] as VisualsArray;
 }
