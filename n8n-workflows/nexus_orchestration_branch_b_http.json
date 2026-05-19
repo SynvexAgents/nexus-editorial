@@ -406,15 +406,43 @@
     },
     {
       "parameters": {
-        "language": "javaScript",
-        "jsCode": "// Validation finale via Supabase REST direct : weekly_reports doit avoir\n// les 6 colonnes JSON alimentées pour la week_id.\nconst weekId = $node['Code: compute_week_id'].json.week_id;\nconst url = `${$env.SUPABASE_URL}/rest/v1/weekly_reports?week_id=eq.${encodeURIComponent(weekId)}&select=linkedin_trends_json,insurance_trends_json,angles_json,winners_json,visuals_json,timing_json`;\nconst res = await fetch(url, {\n  headers: {\n    apikey: $env.SUPABASE_SERVICE_ROLE_KEY,\n    Authorization: `Bearer ${$env.SUPABASE_SERVICE_ROLE_KEY}`,\n    Accept: 'application/json',\n  },\n});\nif (!res.ok) throw new Error(`weekly_reports_select_failed: HTTP ${res.status}`);\nconst rows = await res.json();\nif (!Array.isArray(rows) || rows.length === 0) {\n  throw new Error(`weekly_reports_row_missing: ${weekId}`);\n}\nconst data = rows[0];\nconst missing = [];\nif (!data.linkedin_trends_json) missing.push('linkedin_trends_json');\nif (!data.insurance_trends_json) missing.push('insurance_trends_json');\nif (!data.angles_json) missing.push('angles_json');\nif (!data.winners_json) missing.push('winners_json');\nif (!data.visuals_json) missing.push('visuals_json');\nif (!data.timing_json) missing.push('timing_json');\nif (missing.length > 0) {\n  throw new Error('incomplete_weekly_report: missing=' + missing.join(','));\n}\nreturn [{ json: { week_id: weekId, complete: true, columns_ok: 6 } }];\n",
-        "notes": "Gate qualité avant notification. Throw si une colonne JSON manque → capturé par Error Trigger."
+        "method": "GET",
+        "url": "=https://jugcyqtweavrltmxdogg.supabase.co/rest/v1/weekly_reports?week_id=eq.{{$node['Code: compute_week_id'].json.week_id}}&select=linkedin_trends_json,insurance_trends_json,angles_json,winners_json,visuals_json,timing_json",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "httpCustomAuth",
+        "options": {
+          "timeout": 15000,
+          "response": {
+            "response": {
+              "responseFormat": "json"
+            }
+          }
+        }
       },
-      "id": "code_validate_complete",
-      "name": "Code: validate_weekly_complete",
+      "id": "http_validate_complete",
+      "name": "HTTP: Validate Weekly Complete",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [2600, 240],
+      "credentials": {
+        "httpCustomAuth": {
+          "id": "i30YgXS1wC5UwKtK",
+          "name": "Supabase Service Role (Nexus Editorial)"
+        }
+      },
+      "notes": "GET weekly_reports filtre sur week_id, select des 6 colonnes JSON. Auth via credential httpCustomAuth (apikey + Authorization Bearer). Reponse en JSON parsee par le node suivant."
+    },
+    {
+      "parameters": {
+        "language": "javaScript",
+        "jsCode": "// Gate qualite avant notification : verifie les 6 colonnes JSON de weekly_reports.\n// Aucune variable d'environnement, aucun fetch — uniquement input + node refs.\n// Throw si une colonne manque ou si la row est absente → capture par Error Trigger.\nconst weekId = $node['Code: compute_week_id'].json.week_id;\nconst first = $input.first().json;\nlet rows;\nif (Array.isArray(first)) {\n  rows = first;\n} else if (first && typeof first === 'object' && Object.keys(first).length > 0) {\n  rows = [first];\n} else {\n  rows = [];\n}\nif (rows.length === 0) {\n  throw new Error('weekly_reports_row_missing: ' + weekId);\n}\nconst data = rows[0];\nconst missing = [];\nif (!data.linkedin_trends_json) missing.push('linkedin_trends_json');\nif (!data.insurance_trends_json) missing.push('insurance_trends_json');\nif (!data.angles_json) missing.push('angles_json');\nif (!data.winners_json) missing.push('winners_json');\nif (!data.visuals_json) missing.push('visuals_json');\nif (!data.timing_json) missing.push('timing_json');\nif (missing.length > 0) {\n  throw new Error('incomplete_weekly_report: missing=' + missing.join(','));\n}\nreturn [{ json: { week_id: weekId, complete: true, columns_ok: 6 } }];\n",
+        "notes": "Parse pur de la reponse HTTP Validate. Verifie row presente + 6 colonnes JSON non null. Throw remonte au Error Trigger qui declenche Email Notify Error."
+      },
+      "id": "code_parse_validate",
+      "name": "Code: parse_validate",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [2660, 240]
+      "position": [2760, 240]
     },
     {
       "parameters": {
@@ -547,9 +575,12 @@
       "main": [[{ "node": "Merge: Wait Agents 8+9", "type": "main", "index": 1 }]]
     },
     "Merge: Wait Agents 8+9": {
-      "main": [[{ "node": "Code: validate_weekly_complete", "type": "main", "index": 0 }]]
+      "main": [[{ "node": "HTTP: Validate Weekly Complete", "type": "main", "index": 0 }]]
     },
-    "Code: validate_weekly_complete": {
+    "HTTP: Validate Weekly Complete": {
+      "main": [[{ "node": "Code: parse_validate", "type": "main", "index": 0 }]]
+    },
+    "Code: parse_validate": {
       "main": [[{ "node": "HTTP: Notify Weekly Report (Resend)", "type": "main", "index": 0 }]]
     },
     "Error Trigger": {
