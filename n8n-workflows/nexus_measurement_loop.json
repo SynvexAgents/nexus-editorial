@@ -40,7 +40,7 @@
     {
       "parameters": {
         "method": "GET",
-        "url": "=https://jugcyqtweavrltmxdogg.supabase.co/rest/v1/published_posts?select=post_id,linkedin_url,published_at,scrape_d7_done,scrape_d14_done&archived=eq.false&next_scrape_at=lte.{{$now.toISO()}}&order=next_scrape_at.asc",
+        "url": "=https://jugcyqtweavrltmxdogg.supabase.co/rest/v1/published_posts?select=post_id,linkedin_url,published_at,scrape_d7_done,scrape_d14_done&archived=eq.false&next_scrape_at=lte.{{ encodeURIComponent($now.toISO()) }}&order=next_scrape_at.asc",
         "authentication": "predefinedCredentialType",
         "nodeCredentialType": "httpHeaderAuth",
         "options": {
@@ -63,7 +63,7 @@
           "name": "Supabase apikey LinkedIn"
         }
       },
-      "notes": "GET published_posts.archived=false avec next_scrape_at <= now. Auth via Supabase apikey LinkedIn (service_role)."
+      "notes": "GET published_posts.archived=false avec next_scrape_at <= now. Auth via Supabase apikey LinkedIn (service_role). $now.toISO() URL-encode pour echapper le '+' du timezone offset, sinon PostgREST rejette en 'invalid input syntax for type timestamp with time zone'."
     },
     {
       "parameters": {
