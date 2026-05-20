@@ -1,13 +1,20 @@
 // scrape-post-performance
 // Endpoint POST. Appelé par le cron n8n "Nexus Measurement Loop" à J+7 et J+14
-// pour chaque post publié. Appelle un actor Apify (générique via env
-// APIFY_ACTOR_ID_POST_STATS) avec linkedin_url, parse likes/comments/reposts,
-// INSERT dans post_performance, met à jour scrape_dX_done + next_scrape_at.
+// pour chaque post publié.
+//
+// Apify Actor : data-slayer/linkedin-post-analytics-scraper (ID HFElvVpoWmD1bD9A7)
+//   Input  : { "post_url": "<linkedin url>" }
+//   Output : 1 item avec { social_count: { num_likes, num_comments, num_shares,
+//            reaction_type_counts }, post_text, post_link, urn, posted_at, ... }
+//   Pricing: ~$0.027 par scrape (Free tier : $0.002 start + $0.025 par item).
+//   Latence: ~11-13s end-to-end.
 //
 // Body : { post_id: string (uuid), days_since_publish: 7 | 14 }
 // Sortie : { success: true, perf_id, metrics: {...}, next_scrape_at }
 //          ou { skipped: true, reason: "archived" | "already_scraped" }
 
+import { parseApifyResponse } from '../_shared/apify-post-stats.ts';
+import type { ParsedApifyStats } from '../_shared/apify-post-stats.ts';
 import { verifyAuth } from '../_shared/auth.ts';
 import { errorResponse, handleCorsPreflight, jsonResponse } from '../_shared/cors.ts';
 import { getEnv, requireEnv } from '../_shared/env.ts';
@@ -19,36 +26,12 @@ interface ScrapeBody {
   days_since_publish?: unknown;
 }
 
-interface ApifyMetrics {
-  likes: number | null;
-  comments: number | null;
-  reposts: number | null;
-  impressions: number | null;
-  raw: unknown;
-}
-
-function pickNumber(obj: unknown, keys: string[]): number | null {
-  if (!obj || typeof obj !== 'object') return null;
-  const o = obj as Record<string, unknown>;
-  for (const k of keys) {
-    const v = o[k];
-    if (typeof v === 'number' && Number.isFinite(v)) return v;
-    if (typeof v === 'string') {
-      const n = Number(v.replace(/[^\d.-]/g, ''));
-      if (Number.isFinite(n)) return n;
-    }
-  }
-  return null;
-}
+type ApifyMetrics = ParsedApifyStats;
 
 /**
- * Appelle l'actor Apify configuré via APIFY_ACTOR_ID_POST_STATS. Le contrat
- * exact dépend de l'actor — on tolère plusieurs schémas de réponse en lisant
- * les champs probables (likes/likesCount/numLikes, etc.).
- *
- * Documentation actor à fournir par Marouane (free-form): l'actor doit
- * accepter en input { "post_url": "<linkedin url>" } ou { "url": "..." } et
- * retourner un item avec au minimum { likes, comments, reposts }.
+ * Appelle l'actor Apify configuré via APIFY_ACTOR_ID_POST_STATS (devrait pointer
+ * sur data-slayer/linkedin-post-analytics-scraper). Lit le 1er dataset item et
+ * délègue le mapping à parseApifyResponse (helper pur testable côté Vitest).
  */
 async function callApifyActor(
   linkedinUrl: string,
@@ -59,6 +42,8 @@ async function callApifyActor(
   // Apify actor run synchronous + get dataset items in one call.
   // Endpoint: POST https://api.apify.com/v2/acts/<actor-id>/run-sync-get-dataset-items?token=...
   const endpoint = `https://api.apify.com/v2/acts/${encodeURIComponent(actorId)}/run-sync-get-dataset-items?token=${encodeURIComponent(token)}`;
+  // data-slayer requiert post_url snake_case. On envoie aussi url/postUrl pour
+  // robustesse au cas où l'actor changerait (les champs inutilisés sont ignorés).
   const inputBody = { post_url: linkedinUrl, url: linkedinUrl, postUrl: linkedinUrl };
 
   let attempt = 0;
@@ -97,17 +82,7 @@ async function callApifyActor(
       }
       const item = items[0];
       const metrics: ApifyMetrics = {
-        likes: pickNumber(item, ['likes', 'likesCount', 'numLikes', 'reactions', 'reactionsCount']),
-        comments: pickNumber(item, ['comments', 'commentsCount', 'numComments']),
-        reposts: pickNumber(item, [
-          'reposts',
-          'repostsCount',
-          'shares',
-          'sharesCount',
-          'numReposts',
-        ]),
-        impressions: pickNumber(item, ['impressions', 'views', 'viewsCount', 'numImpressions']),
-        raw: item,
+        ...parseApifyResponse(item),
       };
       return metrics;
     } catch (err) {
