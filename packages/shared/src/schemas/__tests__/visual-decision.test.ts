@@ -44,22 +44,38 @@ describe('visualDecisionSchema', () => {
     }
   });
 
-  it('rejects when visual_recommended=true and gamma_prompt > 1000 chars (v2.1 ceiling)', () => {
-    const invalid = { ...validFixture, gamma_prompt: 'a'.repeat(1001) };
+  it('accepts gamma_prompt at 1300 chars (under v2.2 hard cap 1400)', () => {
+    const valid = { ...validFixture, gamma_prompt: 'a'.repeat(1300) };
+    const result = visualDecisionSchema.safeParse(valid);
+    expect(result.success).toBe(true);
+  });
+
+  it('rejects when visual_recommended=true and gamma_prompt > 1400 chars (v2.2 hard cap)', () => {
+    const invalid = { ...validFixture, gamma_prompt: 'a'.repeat(1401) };
     const result = visualDecisionSchema.safeParse(invalid);
     expect(result.success).toBe(false);
     if (!result.success) {
       const issue = result.error.issues.find((i) => i.path.join('.') === 'gamma_prompt');
       expect(issue).toBeDefined();
-      expect(issue?.message).toMatch(/at most 1000/);
+      expect(issue?.message).toMatch(/at most 1400/);
     }
   });
 
-  it('accepts gamma_prompt at the exact bounds (400 and 1000)', () => {
+  it('accepts gamma_prompt at the exact bounds (400 and 1400)', () => {
     const at400 = { ...validFixture, gamma_prompt: 'a'.repeat(400) };
-    const at1000 = { ...validFixture, gamma_prompt: 'a'.repeat(1000) };
+    const at1400 = { ...validFixture, gamma_prompt: 'a'.repeat(1400) };
     expect(visualDecisionSchema.safeParse(at400).success).toBe(true);
-    expect(visualDecisionSchema.safeParse(at1000).success).toBe(true);
+    expect(visualDecisionSchema.safeParse(at1400).success).toBe(true);
+  });
+
+  it('rejects 399c (just under the min 400)', () => {
+    const invalid = { ...validFixture, gamma_prompt: 'a'.repeat(399) };
+    const result = visualDecisionSchema.safeParse(invalid);
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      const issue = result.error.issues.find((i) => i.path.join('.') === 'gamma_prompt');
+      expect(issue?.message).toMatch(/at least 400/);
+    }
   });
 
   it('accepts empty gamma_prompt when visual_recommended=false', () => {

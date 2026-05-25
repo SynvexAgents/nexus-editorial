@@ -13,6 +13,7 @@ import { logger } from '../_shared/logger.ts';
 import { HAIKU_4_5, computeAnthropicCost } from '../_shared/pricing.ts';
 import type { VisualDecision, WeeklyWinners } from '../_shared/schemas.ts';
 import { visualsArraySchema } from '../_shared/schemas.ts';
+import { truncateAtSentence } from '../_shared/visual-prompt-truncate.ts';
 import { getSupabase } from '../_shared/supabase.ts';
 import { currentIsoWeek } from '../_shared/week.ts';
 
@@ -60,7 +61,7 @@ const SYSTEM_PROMPT_VISUAL = `Tu es Visual Decision pour Synvex. Tu reçois 3 po
    6. TONE & DENSITÉ (1 ligne)
       "Tone : sobre, sérieux, premium. Densité texte : minimaliste sur slides 1/3/6, modérée sur slides 2/4/5. Aucune emoji, aucune métaphore visuelle clichée."
 
-   CONTRAINTE LONGUEUR : 500-800 caractères au TOTAL. Plus court = sous-spécifié (Gamma improvisera mal). Plus long = bruit qui dilue les instructions clés.
+   CONTRAINTE LONGUEUR (v2.2 — post-W22) : cible 500-800 caractères. Reste concis : un brief efficace tient en 800 caractères. Ne dépasse JAMAIS 1200 caractères. Au-delà de 1200c, le système tronquera automatiquement à la dernière phrase complète — autant que tu maîtrises la coupe toi-même en restant sous 1200.
 
 EXEMPLE DE BRIEF COMPLET (pour calibrer ton output) :
 
@@ -80,7 +81,7 @@ RÈGLES :
 - Aucune mention Synvex / Orion / Helios / Chiron / Hermès / Argus / Atlas / Cortex dans le COPY des slides 1-5 (slide 6 peut mentionner Synvex discrètement en signature uniquement).
 - Aucun emoji dans tout le brief.
 - post_position correspond à celui en entrée (1, 2, 3).
-- gamma_prompt entre 500 et 800 chars quand visual_recommended=true (validation Zod min 400 / max 1000 ; on vise 500-800 pour confort).
+- gamma_prompt cible 500-800 chars quand visual_recommended=true. Hard cap qu'Opus vise : 1200 chars. Validation Zod en aval : min 400 / max 1400 (filet de sécurité, le système tronque proprement à 1400 si dépassement).
 
 SORTIE : JSON strict { "visuals": [...] } EXACTEMENT 3 entrées (ordre post_position 1, 2, 3). Aucun texte hors JSON.`;
 
@@ -222,7 +223,39 @@ Deno.serve(async (req: Request) => {
         typeof parsed === 'object' && parsed && 'visuals' in parsed
           ? (parsed as { visuals: unknown }).visuals
           : parsed;
-      const zod = visualsArraySchema.safeParse(visualsRaw);
+
+      // v2.2 (post-W22) : Opus 4.7 dépasse parfois le hard cap Zod 1400c.
+      // On tronque AVANT Zod à la dernière phrase complète. Si après
+      // troncature on est toujours hors bornes (cas pathologique), Zod
+      // capturera et on retry/throw comme avant.
+      const truncated = Array.isArray(visualsRaw)
+        ? visualsRaw.map((v) => {
+            if (
+              v &&
+              typeof v === 'object' &&
+              'gamma_prompt' in v &&
+              typeof (v as { gamma_prompt: unknown }).gamma_prompt === 'string'
+            ) {
+              const orig = (v as { gamma_prompt: string }).gamma_prompt;
+              if (orig.length > 1400) {
+                const t = truncateAtSentence(orig, 1400);
+                log.warn(
+                  {
+                    post_position: (v as { post_position?: unknown }).post_position,
+                    from_chars: orig.length,
+                    to_chars: t.text.length,
+                    clean_cut: t.clean_cut,
+                  },
+                  'gamma_prompt_truncated',
+                );
+                return { ...v, gamma_prompt: t.text };
+              }
+            }
+            return v;
+          })
+        : visualsRaw;
+
+      const zod = visualsArraySchema.safeParse(truncated);
       if (!zod.success) {
         lastError = `zod_failed_attempt_${attempt}: ${zod.error.issues[0]?.message ?? 'unknown'}`;
         log.warn({ attempt, issue: lastError }, 'decide_visuals_zod_failed');

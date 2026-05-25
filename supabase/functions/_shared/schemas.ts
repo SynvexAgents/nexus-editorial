@@ -253,7 +253,8 @@ export const visualDecisionSchema = z
     gamma_prompt: z.string(),
   })
   .superRefine((data, ctx) => {
-    // v2.1 brief Gamma structuré : bornes 400-1000, cible 500-800.
+    // v2.2 (post-W22) : bornes 400-1400, cible 500-800. La troncature à la
+    // dernière phrase complète est faite côté Edge Function avant Zod.
     if (data.visual_recommended && data.gamma_prompt.length < 400) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
@@ -261,11 +262,11 @@ export const visualDecisionSchema = z
         message: 'gamma_prompt must be ≥ 400 chars when visual_recommended is true (target 500-800)',
       });
     }
-    if (data.visual_recommended && data.gamma_prompt.length > 1000) {
+    if (data.visual_recommended && data.gamma_prompt.length > 1400) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
         path: ['gamma_prompt'],
-        message: 'gamma_prompt must be ≤ 1000 chars when visual_recommended is true (target 500-800)',
+        message: 'gamma_prompt must be ≤ 1400 chars when visual_recommended is true (target 500-800, hard cap 1400)',
       });
     }
     if (data.visual_recommended && data.visual_type === 'aucun') {

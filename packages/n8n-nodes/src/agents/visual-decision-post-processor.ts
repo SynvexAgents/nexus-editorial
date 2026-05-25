@@ -10,12 +10,13 @@
  *   2. Si visual_recommended=true :
  *      - visual_type DOIT être ≠ "aucun" → flag critique si "aucun"
  *        (on n'override pas, c'est ambigu — Marouane décide).
- *      - gamma_prompt DOIT être entre 400 et 1000 caractères (v2.1).
+ *      - gamma_prompt DOIT être entre 400 et 1400 caractères (v2.2, post-W22).
  *        Cible idéale 500-800 → flag si hors cible mais dans bornes Zod.
- *        Cible 500-800 = brief Gamma structuré complet (6 sections).
+ *        Le hard cap a été élargi de 1000 → 1400 et l'Edge Function tronque
+ *        proprement à la dernière phrase si Opus dépasse 1400.
  *
  * Note : le schéma Zod superRefine bloque déjà les cas 2 à l'entrée
- * (visual_type='aucun' + recommended=true ou gamma_prompt hors [400,1000]).
+ * (visual_type='aucun' + recommended=true ou gamma_prompt hors [400,1400]).
  * Ce post-processor reste utile pour les cas 1 (recommended=false mais
  * type/prompt non cohérents), qui passent Zod mais sont sémantiquement
  * erronés.
@@ -83,7 +84,7 @@ export function postProcessVisuals(visuals: VisualsArray): PostProcessVisualsOut
       const len = mutable.gamma_prompt.length;
       if (len < 400) {
         criticalFlags.push(
-          `position ${mutable.post_position}: visual_recommended=true mais gamma_prompt ${len}c < 400 (bornes Zod 400-1000, cible 500-800).`,
+          `position ${mutable.post_position}: visual_recommended=true mais gamma_prompt ${len}c < 400 (bornes Zod 400-1400, cible 500-800).`,
         );
       } else if (len < 500) {
         criticalFlags.push(
