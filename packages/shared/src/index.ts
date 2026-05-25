@@ -21,3 +21,5 @@ export * from './rag-light.js';
 export * from './apify-post-stats.js';
 
 export * from './visual-prompt-truncate.js';
+
+export * from './json-repair.js';

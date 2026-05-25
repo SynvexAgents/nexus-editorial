@@ -83,7 +83,20 @@ RÈGLES :
 - post_position correspond à celui en entrée (1, 2, 3).
 - gamma_prompt cible 500-800 chars quand visual_recommended=true. Hard cap qu'Opus vise : 1200 chars. Validation Zod en aval : min 400 / max 1400 (filet de sécurité, le système tronque proprement à 1400 si dépassement).
 
-SORTIE : JSON strict { "visuals": [...] } EXACTEMENT 3 entrées (ordre post_position 1, 2, 3). Aucun texte hors JSON.`;
+SORTIE : JSON strict { "visuals": [...] } EXACTEMENT 3 entrées (ordre post_position 1, 2, 3). Aucun texte hors JSON.
+
+CONTRAINTES JSON ABSOLUES (v2.2.1) :
+- Aucune balise markdown (pas de \`\`\`json ni \`\`\` autour du JSON).
+- ÉCHAPPE TOUS les guillemets internes des strings avec \\". Si tu écris un titre de slide entre guillemets simples, garde-les simples ; n'utilise des guillemets doubles à l'intérieur d'une string JSON qu'avec \\".
+- AUCUN retour à la ligne LITTÉRAL dans une string. Pour formater le brief en plusieurs lignes, utilise \\n (deux caractères : backslash + n), pas un vrai newline.
+- AUCUNE trailing comma avant ] ou }.
+- Aucun texte avant le { initial ni après le } final.
+
+Exemple correct de gamma_prompt avec saut de ligne :
+  "gamma_prompt": "Carrousel 6 slides format portrait.\\nSlide 1 : 'Titre principal' / 'Sous-titre'.\\nSlide 2 : ..."
+Exemple INCORRECT (newline littéral, va casser JSON.parse) :
+  "gamma_prompt": "Carrousel 6 slides format portrait.
+  Slide 1 : ..."`;
 
 function buildUserPrompt(winners: WeeklyWinners): string {
   const summary = winners
@@ -193,7 +206,11 @@ Deno.serve(async (req: Request) => {
     for (let attempt = 1; attempt <= 2; attempt += 1) {
       const resp = await callAnthropic({
         model: 'claude-haiku-4-5',
-        max_tokens: 2048,
+        // v2.2.1 (post-W22) : 2048 trop serré pour 3 briefs Gamma jusqu'à 1400c
+        // chacun + metadata × 3 (~5500c total ≈ 1500-1800 tokens output). Haiku
+        // tronquait parfois mid-string → JSON.parse fail à position ~3456. 4096
+        // donne ~2× la marge, coût Haiku 4.5 négligeable ($0.0004/run extra).
+        max_tokens: 4096,
         temperature: 0.4,
         system: systemBlocks,
         messages,
@@ -204,15 +221,37 @@ Deno.serve(async (req: Request) => {
       try {
         parsed = extractJsonFromPrefilledResponse(text);
       } catch (e) {
-        lastError = `parse_failed_attempt_${attempt}: ${(e as Error).message}`;
-        log.warn({ attempt, preview: text.slice(0, 200) }, 'decide_visuals_parse_failed');
+        const errMsg = (e as Error).message;
+        lastError = `parse_failed_attempt_${attempt}: ${errMsg}`;
+        // v2.2.1 (post-W22) : logger plus de contexte pour diagnostiquer les
+        // JSON malformés. Si l'erreur contient "at position N", extraire la
+        // fenêtre [N-200, N+200] pour voir ce qui a cassé.
+        const posMatch = errMsg.match(/at position (\d+)/);
+        let context = '';
+        if (posMatch) {
+          const pos = Number(posMatch[1]);
+          const lo = Math.max(0, pos - 200);
+          const hi = Math.min(text.length, pos + 200);
+          context = text.slice(lo, hi);
+        }
+        log.warn(
+          {
+            attempt,
+            error: errMsg,
+            text_length: text.length,
+            preview_start: text.slice(0, 300),
+            preview_end: text.slice(-300),
+            preview_around_error: context,
+          },
+          'decide_visuals_parse_failed',
+        );
         if (attempt < 2) {
           messages.pop();
           messages.push({ role: 'assistant', content: text });
           messages.push({
             role: 'user',
             content:
-              "Ta réponse précédente n'a pas pu être parsée. Renvoie UN JSON unique avec clé racine 'visuals' (3 entrées). Aucune balise markdown.",
+              "Ta réponse précédente n'a pas pu être parsée comme JSON. Renvoie UN JSON unique avec clé racine 'visuals' (3 entrées). RÈGLES JSON STRICTES : aucune balise markdown, échappe TOUS les guillemets internes avec \\\", aucun retour à la ligne littéral dans une string (utilise \\n), aucune trailing comma avant ] ou }, aucun texte avant ou après le JSON.",
           });
           messages.push({ role: 'assistant', content: '{' });
         }

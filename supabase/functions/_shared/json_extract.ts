@@ -1,6 +1,8 @@
 // supabase/functions/_shared/json_extract.ts
 // Helpers d'extraction JSON depuis les réponses LLM (avec ou sans prefill).
 
+import { repairJson } from './json-repair.ts';
+
 /**
  * Extrait un OBJET JSON {...} depuis une réponse texte. Tolérant aux
  * fences markdown et au texte trailing. Pour les modèles sans prefill
@@ -20,6 +22,10 @@ export function extractJsonObject(rawText: string): unknown {
 /**
  * Extrait un OBJET JSON avec prefill `{` prépendé. Pour Haiku 4.5 où
  * on utilise `messages: [..., { role: 'assistant', content: '{' }]`.
+ *
+ * v2.2.1 : tente JSON.parse en l'état ; si fail, applique repairJson et
+ * retente une seule fois. Si toujours fail, throw l'erreur originale (pas
+ * celle du retry) pour préserver le diagnostic le plus pertinent.
  */
 export function extractJsonFromPrefilledResponse(rawText: string): unknown {
   let text = `{${rawText}`;
@@ -29,7 +35,16 @@ export function extractJsonFromPrefilledResponse(rawText: string): unknown {
   if (start === -1 || end === -1 || end <= start) {
     throw new Error('no_json_object_found_in_response');
   }
-  return JSON.parse(text.substring(start, end + 1));
+  const slice = text.substring(start, end + 1);
+  try {
+    return JSON.parse(slice);
+  } catch (firstErr) {
+    try {
+      return JSON.parse(repairJson(slice));
+    } catch {
+      throw firstErr;
+    }
+  }
 }
 
 /**
