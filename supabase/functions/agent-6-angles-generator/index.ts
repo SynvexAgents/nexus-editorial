@@ -14,7 +14,6 @@ import { errorResponse, handleCorsPreflight, jsonResponse } from '../_shared/cor
 import { extractJsonObject } from '../_shared/json_extract.ts';
 import { logger } from '../_shared/logger.ts';
 import { OPUS_4_7, computeAnthropicCost } from '../_shared/pricing.ts';
-import { decideRag, fetchMeasuredPostsForRag } from '../_shared/rag-light.ts';
 import {
   type Angle,
   type Archetype,
@@ -44,9 +43,8 @@ const SYNVEX_PRODUCT_REGEX = /\b(Orion|Helios|Chiron|Hermès|Hermes|Argus|Atlas|
 const SYNVEX_NAME_REGEX = /\bSynvex\b/i;
 const PLACEHOLDER_RISK = 'aucun risque majeur identifié (post-processor placeholder)';
 
-async function buildSystemPrompt(ragFragment = ''): Promise<string> {
+async function buildSystemPrompt(): Promise<string> {
   const [brief, tone] = await Promise.all([loadContextBrief(), loadVoiceTone()]);
-  const ragBlock = ragFragment.length > 0 ? `\n${ragFragment}\n` : '';
   return `=== RÔLE ===
 
 Tu es l'Angle Generator du système Nexus Editorial de Synvex. Tu produis EXACTEMENT 8 angles éditoriaux pour la semaine, un par archétype distinct, chacun ancré dans le marché de l'assurance française et calibré pour LinkedIn FR.
@@ -58,7 +56,7 @@ ${brief}
 === TON CIBLE (INVARIANT) ===
 
 ${tone}
-${ragBlock}
+
 === MISSION ===
 
 Inputs : week_id, linkedin_trends, insurance_trends, voice_pack_excerpts (0-5).
@@ -322,30 +320,7 @@ Deno.serve(async (req: Request) => {
     //  où la table synvex_voice_pack est vide.)
     const voice_pack_excerpts: unknown[] = [];
 
-    // RAG light V2 (Measurement Loop) : injecte les top performers passés si
-    // ≥5 posts publiés ET mesurés (best-effort, ne bloque jamais Agent 6).
-    let rag = {
-      status: 'disabled_insufficient_data' as
-        | 'disabled_insufficient_data'
-        | 'light_mode_limited_data'
-        | 'full_mode',
-      measured_posts_count: 0,
-      top_performers: [] as unknown[],
-      prompt_fragment: '',
-    };
-    try {
-      const measured = await fetchMeasuredPostsForRag(sb);
-      rag = decideRag(measured);
-      log.info(
-        { rag_status: rag.status, measured_count: rag.measured_posts_count },
-        'rag_decision',
-      );
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
-      log.warn({ err: msg }, 'rag_fetch_failed_proceeding_without');
-    }
-
-    const systemPrompt = await buildSystemPrompt(rag.prompt_fragment);
+    const systemPrompt = await buildSystemPrompt();
     const userPrompt = buildUserPrompt({
       week_id: weekId,
       linkedin_trends: direct.linkedin_trends_json,
@@ -455,8 +430,6 @@ Deno.serve(async (req: Request) => {
         duration_ms: duration,
         cost_eur: cost.cost_eur,
         retried: final.retried,
-        rag_status: rag.status,
-        rag_measured_count: rag.measured_posts_count,
         ...pp.report,
       },
       'agent_6_done',
@@ -470,10 +443,6 @@ Deno.serve(async (req: Request) => {
       cost_usd: cost.cost_usd,
       cost_eur: cost.cost_eur,
       validation_report: pp.report,
-      rag: {
-        status: rag.status,
-        measured_posts_count: rag.measured_posts_count,
-      },
     });
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
