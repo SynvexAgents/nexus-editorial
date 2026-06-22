@@ -95,6 +95,36 @@ describe('angleScoring.sous_scores accepts the v2.1 lead_trigger_presence key', 
   });
 });
 
+describe('angleScoring.sous_scores accepts the v2.3 originalite_vs_historique key', () => {
+  it('parses sous_scores with the 7th sub-score originalite_vs_historique', () => {
+    const winnerV23 = {
+      ...validFixture[0],
+      scoring: [
+        {
+          angle_id: 'W23-A1',
+          score_total: 0.81,
+          sous_scores: {
+            engagement_potentiel: 8,
+            credibilite: 7,
+            autorite_synvex: 7,
+            transferabilite: 8,
+            risque: 9,
+            lead_trigger_presence: 8,
+            // v2.3 (mai 2026) : diversity engine
+            originalite_vs_historique: 9,
+          },
+          commentaire: 'Angle franchement neuf vs 8 dernières semaines.',
+        },
+      ],
+    };
+    const result = weeklyWinnersSchema.safeParse([winnerV23, validFixture[1], validFixture[2]]);
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data[0]?.scoring[0]?.sous_scores?.originalite_vs_historique).toBe(9);
+    }
+  });
+});
+
 describe('angleScoring.sous_scores tolerance (Opus 4.7 omet parfois ce champ)', () => {
   it('defaults sous_scores to {} when Opus omits the field', () => {
     const winnerWithoutSousScores = {

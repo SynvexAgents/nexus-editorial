@@ -42,4 +42,27 @@ describe('weeklyAnglesSchema', () => {
     const result2 = weeklyAnglesSchema.safeParse(badId);
     expect(result2.success).toBe(false);
   });
+
+  it('accepts the v2.3 diversity-engine archetypes (pool of 10)', () => {
+    const pool = [
+      'constat_lucide',
+      'anecdote_terrain',
+      'these_marche',
+      'question_contre_intuitive',
+      'cas_chiffre',
+      'take_controversee',
+      'decryptage_process',
+      'retour_experience',
+    ] as const;
+    const angles = pool.map((arch, i) => ({ ...makeAngle(i + 1), archetype: arch }) as Angle);
+    const result = weeklyAnglesSchema.safeParse(angles);
+    expect(result.success).toBe(true);
+  });
+
+  it('still accepts legacy archetypes (backward-compat reading of W19-W22)', () => {
+    const legacy = { ...makeAngle(1), archetype: 'retour_experience_metier' } as Angle;
+    const angles = [legacy, ...validFixture.slice(1)];
+    const result = weeklyAnglesSchema.safeParse(angles);
+    expect(result.success).toBe(true);
+  });
 });

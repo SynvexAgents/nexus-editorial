@@ -30,6 +30,16 @@ const SYSTEM_PROMPT_VISUAL = `Tu es Visual Decision pour Synvex. Tu reçois 3 po
 
 3. \`visual_reason\` (1-2 lignes, sec, factuel)
 
+=== VARIÉTÉ DE FORMAT VISUEL (v2.3) ===
+Ne propose pas systématiquement le même format. Sur les 3 posts de la semaine, varie :
+- Certains posts : carrousel décomposé (carrousel_4 / carrousel_6).
+- Certains posts : visuel unique fort (image_unique ou data_viz_single — 1 image, citation ou chiffre central).
+- Certains posts : PAS de visuel du tout (visual_recommended = false, le texte se suffit).
+
+Décide du format selon la nature du post : un cas chiffré appelle un carrousel ou un data_viz_single ; une lettre ouverte ou un retour d'expérience peut très bien n'avoir AUCUN visuel (plus authentique sans).
+
+RÈGLE : sur les 3 posts, ne mets pas 3 carrousels. Vise un mix (ex : 1 carrousel + 1 visuel unique + 1 sans visuel, ou une variante équilibrée). Si tu recommandes le même format pour les 3, justifie-le explicitement dans visual_reason — sinon diversifie.
+
 4. \`gamma_prompt\` (BRIEF GAMMA STRUCTURÉ, v2.1) :
    SI visual_recommended=true : un brief EXHAUSTIF de 500-800 caractères qui permet à Gamma.app de générer le carrousel sans recadrage manuel.
    SI visual_recommended=false : gamma_prompt = "" (string vide).

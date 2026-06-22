@@ -19,3 +19,7 @@ export * from './schemas/apify-post.schema.js';
 export * from './visual-prompt-truncate.js';
 
 export * from './json-repair.js';
+
+export * from './editorial-memory.js';
+
+export * from './editorial-scoring.js';

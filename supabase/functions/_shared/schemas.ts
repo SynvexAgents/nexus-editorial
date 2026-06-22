@@ -132,15 +132,24 @@ export type InsuranceTrends = z.infer<typeof insuranceTrendsSchema>;
 // ----------------------------------------------------------------------------
 // WeeklyAngles (Agent 6)
 // ----------------------------------------------------------------------------
+// Union pool actif (10, v2.3 diversity engine) + anciens archétypes (lecture
+// rétro-compatible W19-W22). Cf. packages/shared weekly-angles.schema.ts.
 export const archetypeEnum = z.enum([
   'constat_lucide',
+  'anecdote_terrain',
+  'these_marche',
+  'question_contre_intuitive',
+  'cas_chiffre',
+  'take_controversee',
+  'decryptage_process',
+  'retour_experience',
+  'lettre_ouverte',
+  'comparaison_cross_secteur',
   'retour_experience_metier',
   'contrarian_assurance',
   'pedagogie_technique',
   'observation_signal_faible',
   'analyse_donnee',
-  'anecdote_terrain',
-  'these_marche',
 ]);
 export const longueurCibleEnum = z.enum(['court', 'moyen', 'long']);
 export const icpEnum = z.enum(['courtier', 'MGA', 'mutuelle', 'insurtech', 'dirigeant_general']);

@@ -14,6 +14,11 @@ import { extractJsonObject } from '../_shared/json_extract.ts';
 import { logger } from '../_shared/logger.ts';
 import { OPUS_4_7, computeAnthropicCost } from '../_shared/pricing.ts';
 import {
+  buildEditorialHistoryBlock,
+  type WeekHistoryRow,
+} from '../_shared/editorial-memory.ts';
+import { computeEditorialWarnings, mergeEditorialWarnings } from '../_shared/editorial-scoring.ts';
+import {
   type InsuranceTrends,
   type LinkedinTrends,
   type WeeklyAngles,
@@ -77,8 +82,9 @@ const BANNED_HOOKS: RegExp[] = [
   /^personne n'en parle/i,
 ];
 
-async function buildSystemPrompt(): Promise<string> {
+async function buildSystemPrompt(historyBlock: string): Promise<string> {
   const [brief, tone] = await Promise.all([loadContextBrief(), loadVoiceTone()]);
+  const memoryBlock = historyBlock.length > 0 ? `\n${historyBlock}\n` : '';
   return `=== RÔLE ===
 
 Tu es l'Editorial Director du système Nexus Editorial de Synvex. Tu reçois 8 angles éditoriaux et tu produis les 3 posts LinkedIn FR de la semaine pour Marouane Borsali, fondateur de Synvex.
@@ -92,31 +98,35 @@ ${brief}
 === TON CIBLE (INVARIANT) ===
 
 ${tone}
-
+${memoryBlock}
 === MISSION — 6 ÉTAPES ===
 
-ÉTAPE 1 — SCORING DES 8 ANGLES (v2.1 — 6 sous-scores)
+ÉTAPE 1 — SCORING DES 8 ANGLES (v2.3 — 7 sous-scores)
 
-Pour chacun des 8 angles, 6 sous-scores entiers /10 :
+Pour chacun des 8 angles, 7 sous-scores entiers /10 :
 - engagement_potentiel
 - credibilite
 - autorite_synvex
 - transferabilite
 - risque (INVERSE : 10 = aucun risque)
-- lead_trigger_presence (NEW — v2.1) : présence d'au moins 1 des 4 leviers lead-generating dans l'angle source — take controversée mesurée, asymétrie d'information, mini-cas chiffré anonymisé, lead magnet implicite (cf. system prompt Agent 6 §MÉCANIQUES LEAD-GENERATING). 0 = angle purement descriptif/analytique. 10 = lead trigger explicite et défendable.
+- lead_trigger_presence (v2.1) : présence d'au moins 1 des 4 leviers lead-generating dans l'angle source — take controversée mesurée, asymétrie d'information, mini-cas chiffré anonymisé, lead magnet implicite. 0 = angle purement descriptif/analytique. 10 = lead trigger explicite et défendable.
+- originalite_vs_historique (NEW — v2.3) : à quel point ce post se distingue des posts des 8 dernières semaines (cf. HISTORIQUE ÉDITORIAL) sur le hook, la mécanique d'accroche, l'angle et la structure. 8-10 = franchement nouveau, aucune redite. 5-7 = quelques similarités mais traitement distinct. 0-4 = redondant avec un post récent → forte pénalité. Si aucun historique fourni, score neutre 7.
 
-score_total = eng×0.20 + cred×0.15 + autorite×0.15 + transf×0.10 + risque×0.15 + lead_trigger×0.25.
-(Pondération v2.1 : lead_trigger pèse 25%, le plus lourd. Réduction proportionnelle des autres pour conserver une somme = 100%.)
+score_total = eng×0.18 + cred×0.13 + autorite×0.13 + transf×0.08 + risque×0.13 + lead_trigger×0.20 + originalite×0.15.
+(Pondération v2.3, somme = 1.00 : lead_trigger 20%, originalite 15% — la diversité éditoriale pèse désormais lourd dans la sélection.)
 
-ALERTE LEAD TRIGGER : si AUCUN des 3 winners sélectionnés n'a un lead_trigger_presence ≥ 6, REMONTER un champ top-level "editorial_warning" dans la sortie JSON avec valeur "no_lead_trigger_in_winners" (string). Format : { "winners": [...], "editorial_warning": "no_lead_trigger_in_winners" }. Sinon ne pas inclure le champ.
+ALERTES (champ top-level "editorial_warning", string, optionnel) :
+- "no_lead_trigger_in_winners" : si AUCUN des 3 winners n'a lead_trigger_presence ≥ 6.
+- "low_originality_vs_recent_weeks" : si les 3 winners ont TOUS originalite_vs_historique < 5.
+Si les deux s'appliquent, choisis le plus grave (low_originality). Sinon omets le champ. (Le système recalcule aussi ces alertes de façon déterministe en aval.)
 
 ÉTAPE 2 — FUSIONS POSSIBLES (0-2)
 
 Fusion intéressante si 2 angles : partage sujet/ICP, combinaison > somme, post < 1500c.
 
-ÉTAPE 3 — SÉLECTION 3 WINNERS (complémentarité + rotation produits v2)
+ÉTAPE 3 — SÉLECTION 3 WINNERS (complémentarité + rotation produits + originalité v2.3)
 
-≥ 2 archétypes distincts. ≥ 2 ICP distincts. ≥ 2 longueurs distinctes. IDÉAL ≥ 3 produits Synvex différents (parmi Orion/Vega/Chiron/Argus/Helios/Hermès/Nexus/Atlas/Cortex — champ produit_synvex_ancrage de chaque angle source). Rationale stratégique 4-6 lignes incluant rotation produit.
+≥ 2 archétypes distincts. ≥ 2 ICP distincts. ≥ 2 longueurs distinctes. IDÉAL ≥ 3 produits Synvex différents (parmi Orion/Vega/Chiron/Argus/Helios/Hermès/Nexus/Atlas/Cortex — champ produit_synvex_ancrage de chaque angle source). PRIVILÉGIE les angles à forte originalite_vs_historique : à qualité égale, choisis le plus distinct des 8 dernières semaines. Rationale stratégique 4-6 lignes incluant rotation produit ET justification d'originalité.
 
 ROTATION ÉQUITABLE : si le user prompt fournit product_rotation_history (count produits adressés sur 4 dernières semaines), priorise les produits sous-représentés. Un produit déjà adressé 2x récemment doit être dé-priorisé.
 
@@ -185,9 +195,9 @@ JSON strict { "winners": [3 entrées], "all_scoring": [8 entrées]?, "fusions_pr
 Chaque winner :
 { post_position (1|2|3), winner_id, fusion_used (false ou [id1, id2]), scoring (array), rationale_strategique, post_final, hook_variantes (3 strings), cta_recommande, longueur_finale (int>0), checklist_qualite_passee (6 booleans), produit_synvex_ancrage (enum 9 produits — hérité de l'angle source) }.
 
-scoring : chaque entrée DOIT contenir { angle_id, score_total, sous_scores, commentaire }. Le champ sous_scores est OBLIGATOIRE — objet {engagement_potentiel, credibilite, autorite_synvex, transferabilite, risque, lead_trigger_presence} (6 entiers /10, v2.1). Ne JAMAIS omettre sous_scores, même si le score_total est bas.
+scoring : chaque entrée DOIT contenir { angle_id, score_total, sous_scores, commentaire }. Le champ sous_scores est OBLIGATOIRE — objet {engagement_potentiel, credibilite, autorite_synvex, transferabilite, risque, lead_trigger_presence, originalite_vs_historique} (7 entiers /10, v2.3). Ne JAMAIS omettre sous_scores, même si le score_total est bas.
 
-editorial_warning (TOP-LEVEL, optionnel) : si AUCUN des 3 winners n'a lead_trigger_presence ≥ 6, inclure "editorial_warning": "no_lead_trigger_in_winners" pour que l'orchestrateur remonte le problème dans son log. Sinon, omettre.
+editorial_warning (TOP-LEVEL, optionnel, string) : "low_originality_vs_recent_weeks" si les 3 winners ont tous originalite_vs_historique < 5 ; sinon "no_lead_trigger_in_winners" si aucun winner n'a lead_trigger_presence ≥ 6 ; sinon omettre.
 
 Ordre post_position 1, 2, 3. Aucun texte hors JSON.`;
 }
@@ -426,7 +436,29 @@ Deno.serve(async (req: Request) => {
       }
     }
 
-    const systemPrompt = await buildSystemPrompt();
+    // Mémoire éditoriale (diversity engine v2.3) : 8 dernières semaines pour
+    // que l'Editorial Director note l'originalité vs historique. Best-effort.
+    let historyBlock = '';
+    try {
+      const { data: hist, error: histErr } = await sb
+        .from('weekly_reports')
+        .select('week_id, angles_json, winners_json')
+        .lt('week_id', weekId)
+        .or('angles_json.not.is.null,winners_json.not.is.null')
+        .order('week_id', { ascending: false })
+        .limit(8);
+      if (histErr) throw new Error(histErr.message);
+      historyBlock = buildEditorialHistoryBlock((hist ?? []) as WeekHistoryRow[]);
+      log.info(
+        { weeks_loaded: (hist ?? []).length, history_injected: historyBlock.length > 0 },
+        'editorial_memory_loaded',
+      );
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      log.warn({ err: msg }, 'editorial_memory_failed_proceeding_without');
+    }
+
+    const systemPrompt = await buildSystemPrompt(historyBlock);
     const userPrompt = buildUserPrompt({
       week_id: weekId,
       angles: r.angles_json,
@@ -509,6 +541,14 @@ Deno.serve(async (req: Request) => {
     if (!final) return errorResponse(`agent_7_failed_after_2_attempts: ${lastError}`, 500);
 
     const pp = postProcessWinners(final.winners, r.angles_json);
+
+    // editorial_warnings (v2.3) : recalcul DÉTERMINISTE depuis les sous-scores
+    // des winners (no_lead_trigger_in_winners, low_originality_vs_recent_weeks),
+    // fusionné avec l'éventuel warning émis par le modèle.
+    const editorialWarnings = mergeEditorialWarnings(
+      final.editorial_warning,
+      computeEditorialWarnings(pp.winners),
+    );
     const cost = computeAnthropicCost(
       {
         input_tokens: final.usage.input_tokens,
@@ -536,7 +576,7 @@ Deno.serve(async (req: Request) => {
         duration_ms: duration,
         cost_eur: cost.cost_eur,
         retried: final.retried,
-        editorial_warning: final.editorial_warning,
+        editorial_warnings: editorialWarnings,
         ...pp.report,
       },
       'agent_7_done',
@@ -549,7 +589,9 @@ Deno.serve(async (req: Request) => {
       cost_usd: cost.cost_usd,
       cost_eur: cost.cost_eur,
       validation_report: pp.report,
-      editorial_warning: final.editorial_warning,
+      editorial_warnings: editorialWarnings,
+      // backward-compat : champ singulier conservé (premier warning ou null).
+      editorial_warning: editorialWarnings[0] ?? null,
     });
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);

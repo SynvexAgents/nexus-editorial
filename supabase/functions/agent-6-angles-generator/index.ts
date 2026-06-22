@@ -15,8 +15,14 @@ import { extractJsonObject } from '../_shared/json_extract.ts';
 import { logger } from '../_shared/logger.ts';
 import { OPUS_4_7, computeAnthropicCost } from '../_shared/pricing.ts';
 import {
+  ARCHETYPE_POOL_KEYS,
+  buildArchetypePoolBlock,
+  buildAttackAxisBlock,
+  buildEditorialHistoryBlock,
+} from '../_shared/editorial-memory.ts';
+import type { WeekHistoryRow } from '../_shared/editorial-memory.ts';
+import {
   type Angle,
-  type Archetype,
   type InsuranceTrends,
   type LinkedinTrends,
   type WeeklyAngles,
@@ -26,16 +32,9 @@ import { getSupabase } from '../_shared/supabase.ts';
 import { loadContextBrief, loadVoiceTone } from '../_shared/system_prompts.ts';
 import { currentIsoWeek, extractWeekNumber } from '../_shared/week.ts';
 
-const REQUIRED_ARCHETYPES: Archetype[] = [
-  'constat_lucide',
-  'retour_experience_metier',
-  'contrarian_assurance',
-  'pedagogie_technique',
-  'observation_signal_faible',
-  'analyse_donnee',
-  'anecdote_terrain',
-  'these_marche',
-];
+// Pool actif des 10 archétypes (diversity engine v2.3). Set de clés pour la
+// validation de couverture déterministe.
+const ARCHETYPE_POOL_SET = new Set<string>(ARCHETYPE_POOL_KEYS);
 
 const ANCRAGE_REGEX =
   /\b(S\/P|loss ratio|ratio combiné|ratio combine|IBNR|prime|primes|sinistre|sinistres|ACPR|RGPD|bordereau|bordereaux|MGA|courtage|mutuelle|mutuelles|claims|indemnisation|fronteur|fronting|assureur|assureurs|insurtech|réassureur|reassureur|réassurance|reassurance|conventions|rétrocession|retrocession|rétrocessions|retrocessions|audit trail|EIOPA|Solvency|solvabilité|solvabilite|CatNat|catnat|IARD|santé collective|sante collective|prévoyance|prevoyance)\b/i;
@@ -43,11 +42,14 @@ const SYNVEX_PRODUCT_REGEX = /\b(Orion|Helios|Chiron|Hermès|Hermes|Argus|Atlas|
 const SYNVEX_NAME_REGEX = /\bSynvex\b/i;
 const PLACEHOLDER_RISK = 'aucun risque majeur identifié (post-processor placeholder)';
 
-async function buildSystemPrompt(): Promise<string> {
+async function buildSystemPrompt(historyBlock: string, weekNumber: number): Promise<string> {
   const [brief, tone] = await Promise.all([loadContextBrief(), loadVoiceTone()]);
+  const memoryBlock = historyBlock.length > 0 ? `\n${historyBlock}\n` : '';
+  const axisBlock = buildAttackAxisBlock(weekNumber);
+  const poolBlock = buildArchetypePoolBlock();
   return `=== RÔLE ===
 
-Tu es l'Angle Generator du système Nexus Editorial de Synvex. Tu produis EXACTEMENT 8 angles éditoriaux pour la semaine, un par archétype distinct, chacun ancré dans le marché de l'assurance française et calibré pour LinkedIn FR.
+Tu es l'Angle Generator du système Nexus Editorial de Synvex. Tu produis EXACTEMENT 8 angles éditoriaux pour la semaine, chacun ancré dans le marché de l'assurance française et calibré pour LinkedIn FR.
 
 === CONTEXTE SYNVEX (INVARIANT) ===
 
@@ -56,24 +58,27 @@ ${brief}
 === TON CIBLE (INVARIANT) ===
 
 ${tone}
+${memoryBlock}
+${axisBlock}
 
 === MISSION ===
 
 Inputs : week_id, linkedin_trends, insurance_trends, voice_pack_excerpts (0-5).
 
-Produis un JSON conforme à WeeklyAngles : OBJET racine { "angles": [...] } avec EXACTEMENT 8 entrées, un par archétype DISTINCT parmi :
-${REQUIRED_ARCHETYPES.join(', ')}.
+Produis un JSON conforme à WeeklyAngles : OBJET racine { "angles": [...] } avec EXACTEMENT 8 entrées, utilisant 8 archétypes DISTINCTS tirés du POOL DE 10 ci-dessous.
 
 CRITIQUE :
 - 8 angles, pas 7 ni 9.
-- 8 archétypes DISTINCTS.
-- Si pas de matière sur un archétype, génère-le quand même.
+- 8 archétypes DISTINCTS, TOUS tirés du pool de 10 (jamais d'archétype hors pool).
+- Si pas de matière sur un archétype choisi, génère-le quand même.
 - Aucun texte hors JSON.
+
+${poolBlock}
 
 === CHAMPS PAR ANGLE (13 — v2 mai 2026) ===
 
 1. angle_id : W{numéro}-A{1..8} (placeholders OK, post-processing régénère).
-2. archetype : enum strict ci-dessus.
+2. archetype : clé snake_case tirée du POOL DE 10 (cf. section POOL D'ARCHÉTYPES).
 3. titre_interne : 40-80 chars.
 4. hook_brut : 1-3 phrases sec, calibré Synvex.
 5. these_centrale : 2-4 phrases, position défendable.
@@ -86,17 +91,6 @@ CRITIQUE :
 12. icp_vise : enum {courtier, MGA, mutuelle, insurtech, dirigeant_general}. VARIE (≥ 4 distincts sur 8).
 13. risques : 1-3 strings spécifiques (sinon ["aucun risque majeur identifié"]).
 14. produit_synvex_ancrage : enum strict parmi {Orion, Vega, Chiron, Argus, Helios, Hermès, Nexus, Atlas, Cortex}. Le produit Synvex que cet angle pré-positionne implicitement (Agent 7 héritera pour bridge subtil/moyen). Choisir selon les fiches §9 du context_brief (par ICP, mécanisme, problème). Respecter accents (Hermès).
-
-=== RÈGLES PAR ARCHÉTYPE ===
-
-- constat_lucide : observation factuelle, sans prescription.
-- retour_experience_metier : récit court généralisé (pas dossier précis).
-- contrarian_assurance : thèse défendue, contrepied argumenté.
-- pedagogie_technique : concept actuariel/opérationnel précis, non condescendant.
-- observation_signal_faible : signal peu commenté, s'appuie sur insurance_trends.signaux_faibles si possible.
-- analyse_donnee : UN chiffre avec contexte (échantillon/durée/source).
-- anecdote_terrain : scène quotidien opé sans inventer.
-- these_marche : position structurelle 1-3 ans.
 
 === MÉCANIQUES LEAD-GENERATING (OBLIGATOIRES SUR AU MOINS 2/3 ANGLES) ===
 
@@ -135,7 +129,7 @@ C. Aucun hook banni.
 D. Aucun chiffre orphelin.
 E. Vouvoiement.
 F. Aucune flatterie ni prescription gratuite.
-G. Diversité forcée : 8 archétypes distincts, ≥ 4 ICP distincts, ≥ 2 longueurs distinctes, AU MOINS 5 produits Synvex distincts sur les 8 angles (idéal : 8 produits différents).
+G. Diversité forcée : 8 archétypes DISTINCTS tirés du pool de 10 (priorise ceux non utilisés dans les 3 dernières semaines — cf. HISTORIQUE ÉDITORIAL), ≥ 4 ICP distincts, ≥ 2 longueurs distinctes, AU MOINS 5 produits Synvex distincts sur les 8 angles (idéal : 8 produits différents).
 H. Stratégie éditoriale v2 : ton angle doit permettre à Agent 7 de placer un bridge produit SUBTIL (80%) ou MOYEN (20%) en fin de post, une mention IA (subtile/directe/démonstrative anonymisée), et un CTA implicite via question terrain ouverte.
 I. Mention clients en générique anonymisé : jamais d'entité nommée (jamais Phenomen, Henner, MSH). Formulations : "un de mes clients", "un opérateur récent", "sur un déploiement courtage", "dans une mutuelle régionale".
 
@@ -156,7 +150,7 @@ function buildUserPrompt(input: {
       : JSON.stringify(input.voice_pack_excerpts, null, 2);
   return `Voici les données de la semaine ${input.week_id}.
 
-Génère EXACTEMENT 8 angles éditoriaux, un par archétype DISTINCT.
+Génère EXACTEMENT 8 angles éditoriaux, 8 archétypes DISTINCTS tirés du pool de 10 (cf. system prompt).
 
 Réponds par UN SEUL objet JSON avec clé racine "angles", commençant par { et finissant par }.
 
@@ -172,18 +166,22 @@ ${JSON.stringify(input.insurance_trends, null, 2)}
 === INPUT 4 : voice_pack_excerpts ===
 ${vp}
 
-RAPPEL : 8 archétypes distincts (${REQUIRED_ARCHETYPES.join(', ')}), ≥ 4 ICP distincts, ≥ 2 longueurs distinctes, AU MOINS 5 produits Synvex distincts (parmi Orion/Vega/Chiron/Argus/Helios/Hermès/Nexus/Atlas/Cortex), aucune mention Synvex dans le contenu du post (le nom produit reste en métadonnée \`produit_synvex_ancrage\` uniquement).`;
+RAPPEL : 8 archétypes DISTINCTS du pool de 10, en priorisant ceux absents des 3 dernières semaines et en respectant l'axe d'attaque de la semaine, ≥ 4 ICP distincts, ≥ 2 longueurs distinctes, AU MOINS 5 produits Synvex distincts (parmi Orion/Vega/Chiron/Argus/Helios/Hermès/Nexus/Atlas/Cortex), aucune mention Synvex dans le contenu du post (le nom produit reste en métadonnée \`produit_synvex_ancrage\` uniquement).`;
 }
 
+// Diversity engine v2.3 : on n'exige plus un set FIXE de 8 archétypes, mais
+// 8 archétypes DISTINCTS tous tirés du POOL DE 10 actif. Rejette : doublons,
+// et tout archétype hors pool (ex : ancien archétype encore accepté par le
+// schéma pour rétro-compat, mais interdit en génération).
 function validateArchetypeCoverage(angles: WeeklyAngles): string | null {
-  const seen = new Map<Archetype, number>();
+  const seen = new Map<string, number>();
   for (const a of angles) seen.set(a.archetype, (seen.get(a.archetype) ?? 0) + 1);
-  const missing = REQUIRED_ARCHETYPES.filter((a) => !seen.has(a));
   const duplicates = [...seen.entries()].filter(([, n]) => n > 1).map(([a, n]) => `${a}×${n}`);
-  if (!missing.length && !duplicates.length) return null;
+  const outOfPool = [...seen.keys()].filter((a) => !ARCHETYPE_POOL_SET.has(a));
+  if (!duplicates.length && !outOfPool.length) return null;
   const parts: string[] = [];
-  if (missing.length) parts.push(`manquants: ${missing.join(', ')}`);
   if (duplicates.length) parts.push(`dupliqués: ${duplicates.join(', ')}`);
+  if (outOfPool.length) parts.push(`hors pool de 10: ${outOfPool.join(', ')}`);
   return parts.join(' | ');
 }
 
@@ -320,7 +318,31 @@ Deno.serve(async (req: Request) => {
     //  où la table synvex_voice_pack est vide.)
     const voice_pack_excerpts: unknown[] = [];
 
-    const systemPrompt = await buildSystemPrompt();
+    // Mémoire éditoriale (diversity engine v2.3) : 8 dernières semaines
+    // (hors semaine courante) avec angles_json OU winners_json. Best-effort —
+    // si la query échoue, on continue sans mémoire (jamais bloquant).
+    let historyBlock = '';
+    try {
+      const { data: hist, error: histErr } = await sb
+        .from('weekly_reports')
+        .select('week_id, angles_json, winners_json')
+        .lt('week_id', weekId)
+        .or('angles_json.not.is.null,winners_json.not.is.null')
+        .order('week_id', { ascending: false })
+        .limit(8);
+      if (histErr) throw new Error(histErr.message);
+      historyBlock = buildEditorialHistoryBlock((hist ?? []) as WeekHistoryRow[]);
+      log.info(
+        { weeks_loaded: (hist ?? []).length, history_injected: historyBlock.length > 0 },
+        'editorial_memory_loaded',
+      );
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      log.warn({ err: msg }, 'editorial_memory_failed_proceeding_without');
+    }
+
+    const weekNumber = extractWeekNumber(weekId);
+    const systemPrompt = await buildSystemPrompt(historyBlock, weekNumber);
     const userPrompt = buildUserPrompt({
       week_id: weekId,
       linkedin_trends: direct.linkedin_trends_json,
@@ -370,7 +392,7 @@ Deno.serve(async (req: Request) => {
           messages.push({ role: 'assistant', content: text });
           messages.push({
             role: 'user',
-            content: `Zod failed: ${lastError}. .length(8) strict, archétypes ${REQUIRED_ARCHETYPES.join(', ')}. Renvoie corrigé.`,
+            content: `Zod failed: ${lastError}. .length(8) strict, archétypes ∈ pool de 10 (${ARCHETYPE_POOL_KEYS.join(', ')}). Renvoie corrigé.`,
           });
         }
         continue;
@@ -382,7 +404,7 @@ Deno.serve(async (req: Request) => {
           messages.push({ role: 'assistant', content: text });
           messages.push({
             role: 'user',
-            content: `Archétypes incorrects : ${coverage}. Régénère avec chaque archétype apparaissant EXACTEMENT 1 fois.`,
+            content: `Archétypes incorrects : ${coverage}. Régénère 8 angles avec 8 archétypes DISTINCTS, tous tirés du pool de 10 (${ARCHETYPE_POOL_KEYS.join(', ')}).`,
           });
         }
         continue;

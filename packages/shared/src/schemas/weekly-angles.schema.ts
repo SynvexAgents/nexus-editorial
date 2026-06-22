@@ -1,14 +1,31 @@
 import { z } from 'zod';
 
+// Union de l'ancien set fixe (v1/v2, W19-W22) + des 7 archétypes ajoutés
+// au "diversity engine" (v2.3, mai 2026). L'enum reste un SUPER-ENSEMBLE pour
+// que les angles_json historiques (anciens noms) restent parsables. La
+// GÉNÉRATION (Agent 6) est désormais cadrée vers le POOL DE 10 actif
+// (cf. ARCHETYPE_POOL dans editorial-memory.ts) ; les 5 anciens archétypes
+// hors-pool (retour_experience_metier, contrarian_assurance, pedagogie_technique,
+// observation_signal_faible, analyse_donnee) ne sont conservés ici que pour la
+// rétro-compatibilité de lecture.
 export const archetypeEnum = z.enum([
+  // --- Pool actif (10) ---
   'constat_lucide',
+  'anecdote_terrain',
+  'these_marche',
+  'question_contre_intuitive',
+  'cas_chiffre',
+  'take_controversee',
+  'decryptage_process',
+  'retour_experience',
+  'lettre_ouverte',
+  'comparaison_cross_secteur',
+  // --- Anciens archétypes (lecture rétro-compatible uniquement) ---
   'retour_experience_metier',
   'contrarian_assurance',
   'pedagogie_technique',
   'observation_signal_faible',
   'analyse_donnee',
-  'anecdote_terrain',
-  'these_marche',
 ]);
 
 export const longueurCibleEnum = z.enum(['court', 'moyen', 'long']);
