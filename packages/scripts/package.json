@@ -25,6 +25,7 @@
     "run-agent-9": "tsx --env-file=../../.env src/run-agent-9.ts",
     "notify-weekly-report": "tsx --env-file=../../.env src/notify-weekly-report.ts",
     "seed:system-prompts": "tsx --env-file=../../.env src/seed-system-prompts.ts",
+    "import:produits": "tsx --env-file=../../.env src/import-produits.ts",
     "apify-cost": "tsx --env-file=../../.env src/apify-cost.ts",
     "probe-apify": "tsx --env-file=../../.env src/probe-apify.ts",
     "audit-watchlist": "tsx --env-file=../../.env src/audit-watchlist.ts",

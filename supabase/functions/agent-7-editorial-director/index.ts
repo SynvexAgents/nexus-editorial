@@ -124,9 +124,11 @@ Si les deux s'appliquent, choisis le plus grave (low_originality). Sinon omets l
 
 Fusion intéressante si 2 angles : partage sujet/ICP, combinaison > somme, post < 1500c.
 
-ÉTAPE 3 — SÉLECTION 3 WINNERS (complémentarité + rotation produits + originalité v2.3)
+ÉTAPE 3 — SÉLECTION 3 WINNERS (complémentarité + rotation produits + originalité + piliers v2.4)
 
 ≥ 2 archétypes distincts. ≥ 2 ICP distincts. ≥ 2 longueurs distinctes. IDÉAL ≥ 3 produits Synvex différents (parmi Orion/Vega/Chiron/Argus/Helios/Hermès/Nexus/Atlas/Cortex — champ produit_synvex_ancrage de chaque angle source). PRIVILÉGIE les angles à forte originalite_vs_historique : à qualité égale, choisis le plus distinct des 8 dernières semaines. Rationale stratégique 4-6 lignes incluant rotation produit ET justification d'originalité.
+
+ÉQUILIBRE DES 3 PILIERS (v2.4) : les 8 angles sont générés autour de 3 piliers éditoriaux — PREUVE (problème concret + résultat chiffré), ÉDUCATION (comment une mécanique métier fonctionne vraiment), PHILOSOPHIE (prise de position, conviction). Parmi les 8, privilégie une sélection finale de 3 qui couvre les 3 piliers quand c'est possible, pour un équilibre éditorial. Ce n'est PAS un rejet strict : la qualité et l'originalité priment, mais à qualité égale, préfère la diversité de piliers.
 
 ROTATION ÉQUITABLE : si le user prompt fournit product_rotation_history (count produits adressés sur 4 dernières semaines), priorise les produits sous-représentés. Un produit déjà adressé 2x récemment doit être dé-priorisé.
 

@@ -23,3 +23,5 @@ export * from './json-repair.js';
 export * from './editorial-memory.js';
 
 export * from './editorial-scoring.js';
+
+export * from './produit-synvex.js';

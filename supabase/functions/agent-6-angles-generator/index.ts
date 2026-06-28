@@ -22,6 +22,13 @@ import {
 } from '../_shared/editorial-memory.ts';
 import type { WeekHistoryRow } from '../_shared/editorial-memory.ts';
 import {
+  type ProduitRotationRow,
+  buildPiliersBlock,
+  buildProduitBlock,
+  buildRegleVeriteBlock,
+  pickProductForRotation,
+} from '../_shared/produit-synvex.ts';
+import {
   type Angle,
   type InsuranceTrends,
   type LinkedinTrends,
@@ -42,14 +49,26 @@ const SYNVEX_PRODUCT_REGEX = /\b(Orion|Helios|Chiron|Hermès|Hermes|Argus|Atlas|
 const SYNVEX_NAME_REGEX = /\bSynvex\b/i;
 const PLACEHOLDER_RISK = 'aucun risque majeur identifié (post-processor placeholder)';
 
-async function buildSystemPrompt(historyBlock: string, weekNumber: number): Promise<string> {
+async function buildSystemPrompt(
+  historyBlock: string,
+  weekNumber: number,
+  produitBlock: string,
+): Promise<string> {
   const [brief, tone] = await Promise.all([loadContextBrief(), loadVoiceTone()]);
   const memoryBlock = historyBlock.length > 0 ? `\n${historyBlock}\n` : '';
   const axisBlock = buildAttackAxisBlock(weekNumber);
   const poolBlock = buildArchetypePoolBlock();
+  // Bloc produit (carburant éditorial). Si vide (fallback actu), on n'injecte
+  // ni la fiche ni les piliers ni la règle de vérité produit.
+  const produitSection =
+    produitBlock.length > 0
+      ? `\n${produitBlock}\n\n${buildPiliersBlock()}\n\n${buildRegleVeriteBlock()}\n`
+      : '';
   return `=== RÔLE ===
 
 Tu es l'Angle Generator du système Nexus Editorial de Synvex. Tu produis EXACTEMENT 8 angles éditoriaux pour la semaine, chacun ancré dans le marché de l'assurance française et calibré pour LinkedIn FR.
+
+${produitBlock.length > 0 ? "Ta matière première cette semaine est la FICHE PRODUIT ci-dessous (carburant réel : problèmes terrain, mécaniques, chiffres déjà cadrés). Tu documentes ce qui existe, tu n'inventes pas." : ''}
 
 === CONTEXTE SYNVEX (INVARIANT) ===
 
@@ -60,12 +79,12 @@ ${brief}
 ${tone}
 ${memoryBlock}
 ${axisBlock}
-
+${produitSection}
 === MISSION ===
 
-Inputs : week_id, linkedin_trends, insurance_trends, voice_pack_excerpts (0-5).
+Inputs : week_id, linkedin_trends, insurance_trends, voice_pack_excerpts (0-5)${produitBlock.length > 0 ? ', fiche PRODUIT DE LA SEMAINE' : ''}.
 
-Produis un JSON conforme à WeeklyAngles : OBJET racine { "angles": [...] } avec EXACTEMENT 8 entrées, utilisant 8 archétypes DISTINCTS tirés du POOL DE 10 ci-dessous.
+Produis un JSON conforme à WeeklyAngles : OBJET racine { "angles": [...] } avec EXACTEMENT 8 entrées, utilisant 8 archétypes DISTINCTS tirés du POOL DE 10 ci-dessous.${produitBlock.length > 0 ? ' Chaque angle puise sa matière dans la fiche produit et alimente l\'un des 3 piliers (Preuve / Éducation / Philosophie).' : ''}
 
 CRITIQUE :
 - 8 angles, pas 7 ni 9.
@@ -341,8 +360,37 @@ Deno.serve(async (req: Request) => {
       log.warn({ err: msg }, 'editorial_memory_failed_proceeding_without');
     }
 
+    // Produit de la semaine (rotation équitable, diversity engine v2.4) :
+    // pioche le produit actif le moins récemment utilisé et génère depuis SA
+    // fiche réelle. Best-effort — si la table est vide ou la query échoue,
+    // fallback sur la génération depuis l'actu seule.
+    let produitBlock = '';
+    let produitSource: string | null = null;
+    let pickedProductSlug: string | null = null;
+    try {
+      const { data: prods, error: prodErr } = await sb
+        .from('produits_synvex')
+        .select(
+          'slug, nom, domaine, positionnement, problemes_terrain, mecaniques, chiffres, punchlines, cibles, actif, derniere_utilisation_semaine',
+        )
+        .eq('actif', true);
+      if (prodErr) throw new Error(prodErr.message);
+      const picked = pickProductForRotation((prods ?? []) as ProduitRotationRow[]);
+      if (picked) {
+        produitBlock = buildProduitBlock(picked as unknown as Parameters<typeof buildProduitBlock>[0]);
+        produitSource = (picked as { slug: string }).slug;
+        pickedProductSlug = produitSource;
+        log.info({ produit_source: produitSource }, 'produit_rotation_picked');
+      } else {
+        log.warn({}, 'no_product_available_fallback_actu');
+      }
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      log.warn({ err: msg }, 'produit_rotation_failed_fallback_actu');
+    }
+
     const weekNumber = extractWeekNumber(weekId);
-    const systemPrompt = await buildSystemPrompt(historyBlock, weekNumber);
+    const systemPrompt = await buildSystemPrompt(historyBlock, weekNumber, produitBlock);
     const userPrompt = buildUserPrompt({
       week_id: weekId,
       linkedin_trends: direct.linkedin_trends_json,
@@ -445,6 +493,16 @@ Deno.serve(async (req: Request) => {
     );
     if (upErr) return errorResponse(`upsert_failed: ${upErr.message}`, 500);
 
+    // Marque le produit comme utilisé cette semaine (rotation). Best-effort :
+    // un échec ici ne doit pas faire échouer la génération déjà persistée.
+    if (pickedProductSlug) {
+      const { error: rotErr } = await sb
+        .from('produits_synvex')
+        .update({ derniere_utilisation_semaine: weekId })
+        .eq('slug', pickedProductSlug);
+      if (rotErr) log.warn({ err: rotErr.message }, 'produit_rotation_update_failed_non_fatal');
+    }
+
     const duration = Date.now() - t0;
     log.info(
       {
@@ -452,6 +510,7 @@ Deno.serve(async (req: Request) => {
         duration_ms: duration,
         cost_eur: cost.cost_eur,
         retried: final.retried,
+        produit_source: produitSource,
         ...pp.report,
       },
       'agent_6_done',
@@ -460,6 +519,7 @@ Deno.serve(async (req: Request) => {
     return jsonResponse({
       week_id: weekId,
       insurance_source_week: insuranceSource,
+      produit_source: produitSource,
       retried: final.retried,
       duration_ms: duration,
       cost_usd: cost.cost_usd,
